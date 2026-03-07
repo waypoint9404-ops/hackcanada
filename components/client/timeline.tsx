@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Markdown } from "@/components/ui/markdown";
 
 interface TimelineEvent {
   id: string;
@@ -19,6 +20,16 @@ export function Timeline({ clientId }: TimelineProps) {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     async function fetchTimeline() {
@@ -78,7 +89,14 @@ export function Timeline({ clientId }: TimelineProps) {
         const date = event.timestamp ? new Date(event.timestamp) : new Date();
         const formattedDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         const isWorkerEdit = event.content.includes("[WORKER EDIT");
-        
+        const isExpanded = expanded.has(event.id);
+
+        const cleanContent = isWorkerEdit
+          ? event.content.replace(/\[WORKER EDIT[\s\S]*?\]\n*/, '').trim()
+          : event.content;
+
+        const isLong = cleanContent.length > 280;
+
         return (
           <div key={event.id} className="group flex gap-4 pr-2 hover:bg-bg-elevated -ml-4 pl-4 py-2 rounded-sm transition-colors">
             {/* Timeline line & dot */}
@@ -102,11 +120,21 @@ export function Timeline({ clientId }: TimelineProps) {
                 <span className="meta-mono">{formattedDate}</span>
               </div>
               
-              <div className="text-[13px] sm:text-sm text-text-secondary leading-relaxed whitespace-pre-wrap break-words">
-                {isWorkerEdit 
-                  ? event.content.replace(/\[WORKER EDIT[\s\S]*?\]\n*/, '').trim()
-                  : event.content}
+              <div className={`text-[13px] sm:text-sm text-text-secondary leading-relaxed break-words ${isLong && !isExpanded ? "max-h-[120px] overflow-hidden relative" : ""}`}>
+                <Markdown content={cleanContent} />
+                {isLong && !isExpanded && (
+                  <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-bg-base to-transparent group-hover:from-bg-elevated" />
+                )}
               </div>
+
+              {isLong && (
+                <button
+                  onClick={() => toggleExpand(event.id)}
+                  className="text-[11px] font-mono text-accent hover:underline self-start mt-1 cursor-pointer"
+                >
+                  {isExpanded ? "Show less" : "Show more"}
+                </button>
+              )}
             </div>
           </div>
         );
