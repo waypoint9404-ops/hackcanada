@@ -1,6 +1,19 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Waypoint
 
-## Getting Started
+Waypoint is a comprehensive platform designed for municipal social workers, enabling them to manage outreach, case notes, and crisis interventions seamlessly while on the go. Currently in its MVP phase, Waypoint focuses on providing a mobile-first "Car Dashboard" experience with secure AI-assisted memory and audio case recaps.
+
+## Future Scope
+
+While the current MVP demonstrates the core utility—voice ingestions, chronologically intelligent AI case memory via Backboard, and Auth0-secured access—**Waypoint is destined to become a full-scale Municipal Service Management Platform.** 
+
+In the future, Waypoint will grow to include:
+- **Full Case Management Integrations:** Syncing seamlessly with legacy government databases and health record systems.
+- **Advanced Predictive Analytics:** Utilizing longitudinal data to predict client crisis patterns and preemptively allocate municipal resources.
+- **Inter-Agency Collaboration:** Secure, role-based sharing of specific case streams between housing authorities, mental health professionals, and emergency responders.
+- **Offline-First Capabilities:** A robust local-first architecture ensuring full functionality in areas with zero cell coverage (e.g., building basements or remote shelters), syncing automatically when a connection is restored.
+- **Hardware Integration:** Potential integration with wearable safety devices or vehicle dashboards for even more seamless, eyes-up interaction.
+
+## Getting Started (Development)
 
 First, run the development server:
 
@@ -15,22 +28,3 @@ bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

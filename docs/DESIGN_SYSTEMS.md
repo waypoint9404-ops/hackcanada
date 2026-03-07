@@ -1,11 +1,11 @@
-# DESIGN SYSTEM: Backboard OS for Municipal Outreach
+# DESIGN SYSTEM: Waypoint for Municipal Outreach
 
 ## 1. Aesthetic Direction: "Humane Utility & Dignified Minimalism"
 
 **The Context**: Our core user is a municipal social worker operating out of their car, constantly context-switching between high-stress, real-world crises. 
 **The Vibe**: We must completely reject the standard "SaaS/AI" aesthetics (no purple gradients, no glassmorphism, no generic rounded 'bubbly' interfaces, no Inter font). The visual language must blend **industrial utilitarianism** with **editorial elegance**. 
 
-The app must feel like a deeply reliable, subpoena-safe archival tool, while simultaneously affording immense dignity to the clients it tracks. It should feel calming, authoritative, and tactile.
+Waypoint must feel like a deeply reliable, subpoena-safe archival tool, while simultaneously affording immense dignity to the clients it tracks. It should feel calming, authoritative, and tactile.
 
 ---
 
@@ -50,7 +50,7 @@ We use a high-contrast typographical pairing to separate the *human* element fro
 
 ## 4. Textures, Geometry & Depth
 
-*   **Background Texture**: Apply a barely perceptible SVG noise/grain overlay (opacity `0.02 - 0.04`) across the main background. This gives the application a tactile, physical paper-like feel, increasing trust and reducing the "digital fatigue".
+*   **Background Texture**: Apply a barely perceptible SVG noise/grain overlay (opacity `0.02 - 0.04`) across the main background. This gives Waypoint a tactile, physical paper-like feel, increasing trust and reducing the "digital fatigue".
 *   **Geometry & Borders**:
     *   *No generic bubbly corners.* Use slightly sharper corners. 
     *   `border-radius`: Use `rounded-sm` (4px) or `rounded-md` (6px) for cards, and `rounded-none` for full-bleed timeline dividers. This creates a serious, structured, "archival" feel. It is a tool for professionals, not a consumer social network.

@@ -1,4 +1,4 @@
-**Condensed MVP outline (~500 words)**
+**Condensed MVP outline: Waypoint (~500 words)**
 --------------------------------------
 
 **Core persona and scenario**
@@ -16,7 +16,7 @@
 
 1.  Secure mobile‑first login (Auth0)
     
-    *   Worker opens the PWA (Next.js/React/Tailwind) on phone or laptop and signs in via Auth0’s Universal Login.​
+    *   Worker opens Waypoint (Next.js/React/Tailwind) on phone or laptop and signs in via Auth0’s Universal Login.​
         
     *   Auth0 enforces strong security (MFA/passwordless) for this highly sensitive data and attaches role/tenant claims for future authorization.​
         
@@ -62,7 +62,7 @@
         
         *   Worker records a call on their device, then uses the PWA “Upload call recording” for a known client (select Alex) or “New client” flow.
             
-        *   For a truly new caller, app creates a new client with name + phone and a fresh Backboard thread, then runs the same ingestion pipeline.
+        *   For a truly new caller, Waypoint creates a new client with name + phone and a fresh Backboard thread, then runs the same ingestion pipeline.
             
 5.  Smart Q&A inside each case
     

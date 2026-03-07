@@ -1,7 +1,7 @@
-# MVP Action Plan: "Backboard OS for Municipal Outreach"
+# MVP Action Plan: "Waypoint for Municipal Outreach"
 
 ## Overview
-This document outlines the actionable, high-level steps to take this project from 0 to a 100% working Minimum Viable Product (MVP). It is designed to be a comprehensive reference for software developers building the application, ensuring that design, security, and AI integrations align with the core scenario of a municipal social worker (e.g., Sarah) operating out of her car.
+This document outlines the actionable, high-level steps to take Waypoint from 0 to a 100% working Minimum Viable Product (MVP). It is designed to be a comprehensive reference for software developers building the platform, ensuring that design, security, and AI integrations align with the core scenario of a municipal social worker (e.g., Sarah) operating out of her car.
 
 ---
 
