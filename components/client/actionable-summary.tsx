@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Markdown } from "@/components/ui/markdown";
 
 interface ActionableSummaryProps {
   clientId: string;
@@ -65,8 +66,8 @@ export function ActionableSummary({ clientId }: ActionableSummaryProps) {
         </span>
       </div>
       
-      <div className="prose prose-sm prose-zinc max-w-none text-text-primary leading-relaxed whitespace-pre-wrap">
-        {summary}
+      <div className="text-sm text-text-primary leading-relaxed">
+        <Markdown content={summary ?? ""} />
       </div>
     </div>
   );
