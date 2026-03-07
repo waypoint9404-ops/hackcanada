@@ -19,6 +19,18 @@
     *   Worker opens Waypoint (Next.js/React/Tailwind) on phone or laptop and signs in via Auth0’s Universal Login.​
         
     *   Auth0 enforces strong security (MFA/passwordless) for this highly sensitive data and attaches role/tenant claims for future authorization.​
+
+```text
++-----------------------------+
+|          WAYPOINT           |
+|                             |
+|  Secure access for          |
+|  Municipal Social Workers   |
+|                             |
+|  [   Sign In via Auth0   ]  |
+|                             |
++-----------------------------+
+```
         
 2.  Client list with crisis‑aware context
     
@@ -29,6 +41,23 @@
         *   Simple crisis indicator (e.g., low/med/high) derived from past notes.
             
     *   This is the entry point into deeper per‑client memory.
+
+```text
++-------------------------------------------------------------+
+| Dashboard                                              ⚙️   |
+| 12 assigned to Sarah                                        |
+|                                                             |
+| +-------------------+ +-------------------+ +-------------+ |
+| | Alex Mercer       | | Sam Riley         | | Jamie T.    | |
+| | 🔴 HIGH           | | 🟠 MED             | | 🟢 LOW      | |
+| | [HOUSING]         | | [SUBSTANCE]       | | [HOUSING]   | |
+| | [MENTAL_HEALTH]   | |                   | |             | |
+| +-------------------+ +-------------------+ +-------------+ |
+|                                                             |
+|=============================================================|
+|                 📇 Clients          👤 Profile              |
++-------------------------------------------------------------+
+```
         
 3.  Per‑client smart memory & timeline (Backboard)
     
@@ -41,6 +70,30 @@
         *   Actionable summary/overview: short, constantly updated paragraph optimized for “brush‑up before a visit” (key facts, current situation, recommended next steps).
             
         *   Highly concise narrative summary (1–3 sentences capturing the case at a glance).
+
+```text
++-----------------------------+
+| ‹ Back       Alex Mercer    |
+| 🔴 HIGH RISK                |
+|-----------------------------|
+| ⚡ Actionable Summary        |
+| Alex missed rent on the 2nd.|
+| Eviction risk high. Ensure  |
+| medication is up to date.   |
+|-----------------------------|
+| 🎧 [ Generate Audio Recap ] |
+|-----------------------------|
+| ⏳ Timeline (Backboard)      |
+| 10:45 AM - Voice Note       |
+| Met at 4th St shelter. ...  |
+|-----------------------------|
+| Yesterday - Missed Appt     |
+| Scheduled check-in ...      |
+|                             |
+|=============================|
+| 🎙️ Record   |  [Ask Q&A...] |
++-----------------------------+
+```
             
 4.  AI‑assisted note creation (per client)
     
@@ -52,17 +105,58 @@
             
         *   Backboard writes into Alex’s thread and returns:
             
-            *   Clean, structured case note.
+            *   Clean, structured case note (which the worker can review and edit before finalizing).
                 
             *   Auto‑tagged issue categories (housing, mental health, substance use, etc.).
                 
             *   Updated risk level for Alex.
+
+```text
++-----------------------------+
+| Cancel          Save Note   |
+|-----------------------------|
+| 📝 Edit AI Case Note        |
+| Client: Alex Mercer         |
+| Date: Oct 24, 2:15 PM       |
+|-----------------------------|
+| [Note Content]              |
+| Met Alex at the shelter. He |
+| missed rent due to...       |
+|                             |
+| [Tags]                      |
+| (x) HOUSING                 |
+| (x) MENTAL_HEALTH           |
+| (+) Add Tag                 |
+|                             |
+|=============================|
+| Keyboard/Dictation tools    |
++-----------------------------+
+```
                 
     *   Phone‑call flow (MVP):
         
         *   Worker records a call on their device, then uses the PWA “Upload call recording” for a known client (select Alex) or “New client” flow.
             
         *   For a truly new caller, Waypoint creates a new client with name + phone and a fresh Backboard thread, then runs the same ingestion pipeline.
+
+```text
++-----------------------------+
+|                             |
+|      (Background dimmed)    |
+|                             |
+|  +-----------------------+  |
+|  | Recording Visit...    |  |
+|  |                       |  |
+|  |        00:45          |  |
+|  |    ılılılllıılılı     |  |
+|  |                       |  |
+|  |  [🛑 Stop & Ingest]   |  |
+|  +-----------------------+  |
+|                             |
+|=============================|
+|   📇 Clients     👤 Profile   |
++-----------------------------+
+```
             
 5.  Smart Q&A inside each case
     
