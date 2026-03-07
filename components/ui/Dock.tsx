@@ -50,7 +50,7 @@ function DockItem({ children, className = '', onClick, mouseX, spring, distance,
     >
       {Children.map(children, child => {
         if (child && typeof child === 'object' && 'props' in child) {
-           return cloneElement(child as React.ReactElement, { isHovered });
+           return cloneElement(child as React.ReactElement<any>, { isHovered });
         }
         return child;
       })}
