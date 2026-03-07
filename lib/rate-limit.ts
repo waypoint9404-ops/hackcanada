@@ -45,7 +45,10 @@ export function rateLimit(config: RateLimitConfig) {
         request.headers.get("x-real-ip") ??
         "unknown";
 
-      const key = `${ip}`;
+      // Scope buckets by route so heavy traffic on one endpoint does not
+      // accidentally throttle unrelated API handlers.
+      const path = request.nextUrl.pathname || "unknown-path";
+      const key = `${path}:${ip}`;
       const now = Date.now();
 
       let entry = store.get(key);

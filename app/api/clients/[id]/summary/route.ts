@@ -20,7 +20,8 @@ Be factual, concise, and objective. Use present tense. Do not speculate.`;
 
 /**
  * GET /api/clients/[id]/summary
- * Ask Backboard for an up-to-date actionable summary of the client.
+ * Returns cached summary by default. Pass ?refresh=true to regenerate from Backboard.
+ * This ensures manual edits persist until explicitly refreshed.
  */
 export async function GET(
   request: NextRequest,
@@ -36,6 +37,7 @@ export async function GET(
 
   try {
     const { id } = await params;
+    const refresh = request.nextUrl.searchParams.get("refresh") === "true";
     const supabase = createAdminClient();
 
     const { data: client, error } = await supabase
@@ -59,6 +61,14 @@ export async function GET(
       });
     }
 
+    // Return cached summary unless an explicit refresh is requested
+    if (!refresh && client.summary) {
+      return NextResponse.json({
+        summary: client.summary,
+        source: "cached",
+      });
+    }
+
     // Ask Backboard for a live summary via the Pro model (deeper reasoning)
     const response = await sendMessageWithModel(
       client.backboard_thread_id,
@@ -69,7 +79,7 @@ export async function GET(
 
     const summaryText = response.content ?? "Unable to generate summary.";
 
-    // Optionally update the cached summary in Supabase
+    // Cache the AI-generated summary in Supabase
     await supabase
       .from("clients")
       .update({ summary: summaryText, updated_at: new Date().toISOString() })
