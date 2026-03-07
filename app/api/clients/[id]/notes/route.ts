@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { auth0 } from "@/lib/auth0";
 import {
   sendMessageWithModel,
   GEMINI_FLASH_CONFIG,
@@ -34,6 +35,11 @@ export async function POST(
     const body = await request.json();
     const { content, messageId, tags, risk_level } = body;
 
+    const session = await auth0.getSession(request);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (!content || typeof content !== "string") {
       return NextResponse.json(
         { error: "Note content is required" },
@@ -43,9 +49,19 @@ export async function POST(
 
     const supabase = createAdminClient();
 
+    const { data: worker } = await supabase
+      .from("users")
+      .select("id")
+      .eq("auth0_id", session.user.sub)
+      .single();
+
+    if (!worker) {
+      return NextResponse.json({ error: "Worker not found" }, { status: 404 });
+    }
+
     const { data: client, error } = await supabase
       .from("clients")
-      .select("id, name, backboard_thread_id, tags, risk_level")
+      .select("id, name, backboard_thread_id, tags, risk_level, assigned_worker_id")
       .eq("id", id)
       .single();
 
@@ -63,17 +79,12 @@ export async function POST(
       );
     }
 
-    // Send the edited note to Backboard as a worker edit
-    const editMessage = `[WORKER EDIT — ${new Date().toISOString()}]\nThe social worker has reviewed and edited the following case note for ${client.name}:\n\n${content}\n\nPlease acknowledge this edit and update your understanding of this client accordingly.`;
+    if (client.assigned_worker_id && client.assigned_worker_id !== worker.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    const response = await sendMessageWithModel(
-      client.backboard_thread_id,
-      editMessage,
-      GEMINI_FLASH_CONFIG,
-      { memory: "Auto" }
-    );
-
-    // Persist the edit in Supabase so it survives page refresh
+    // ── Step 1: Persist the edit in Supabase immediately ──────────────────────
+    // This happens first so the edit is never lost even if Backboard is slow/down.
     if (messageId && typeof messageId === "string") {
       try {
         await supabase
@@ -83,16 +94,17 @@ export async function POST(
               client_id: id,
               message_id: messageId,
               edited_content: content,
+              edited_by: worker.id,
               updated_at: new Date().toISOString(),
             },
             { onConflict: "client_id,message_id" }
           );
       } catch {
-        // note_edits table may not exist yet — edit is still saved to Backboard
+        // note_edits table may not exist yet — edit is still sent to Backboard
       }
     }
 
-    // Update tags and risk_level in Supabase if provided
+    // ── Step 2: Update tags and risk_level in Supabase if provided ────────────
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -100,12 +112,48 @@ export async function POST(
     if (risk_level && ["LOW", "MED", "HIGH"].includes(risk_level)) {
       updates.risk_level = risk_level;
     }
-
     await supabase.from("clients").update(updates).eq("id", id);
+
+    // ── Step 3: Send to Backboard so AI memory reflects the correction ────────
+    // This is required for correctness. Retry once for transient network errors.
+    const editMessage = `[WORKER EDIT — ${new Date().toISOString()}]\nThe social worker has reviewed and edited the following case note for ${client.name}:\n\n${content}\n\nPlease acknowledge this edit and update your understanding of this client accordingly.`;
+
+    let response;
+    try {
+      response = await sendMessageWithModel(
+        client.backboard_thread_id,
+        editMessage,
+        GEMINI_FLASH_CONFIG,
+        { memory: "Auto" }
+      );
+    } catch {
+      try {
+        response = await sendMessageWithModel(
+          client.backboard_thread_id,
+          editMessage,
+          GEMINI_FLASH_CONFIG,
+          { memory: "Auto" }
+        );
+      } catch (retryErr) {
+        const reason = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        console.error("[notes] Backboard sync failed after retry:", reason);
+        return NextResponse.json(
+          {
+            error:
+              "Note edit was saved locally but failed to sync to Backboard. Please retry.",
+            backboard_thread_id: client.backboard_thread_id,
+            details: reason,
+          },
+          { status: 502 }
+        );
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      acknowledgment: response.content,
+      acknowledgment: response?.content,
+      backboard_thread_id: client.backboard_thread_id,
+      run_id: response?.run_id,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

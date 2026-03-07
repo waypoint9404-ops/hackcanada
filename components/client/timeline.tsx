@@ -24,6 +24,7 @@ export function Timeline({ clientId }: TimelineProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const startEditing = (event: TimelineEvent) => {
@@ -35,18 +36,23 @@ export function Timeline({ clientId }: TimelineProps) {
   const cancelEditing = () => {
     setEditingId(null);
     setEditContent("");
+    setSaveError(null);
   };
 
   const saveEdit = async () => {
     if (!editingId) return;
     setSaving(true);
+    setSaveError(null);
     try {
       const res = await fetch(`/api/clients/${clientId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: editContent, messageId: editingId }),
       });
-      if (!res.ok) throw new Error("Failed to save");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Server error ${res.status}`);
+      }
       // Update the local event content
       setEvents((prev) =>
         prev.map((e) => (e.id === editingId ? { ...e, content: editContent } : e))
@@ -54,7 +60,9 @@ export function Timeline({ clientId }: TimelineProps) {
       setEditingId(null);
       setEditContent("");
     } catch (err) {
-      console.error(err);
+      const msg = err instanceof Error ? err.message : "Failed to save";
+      console.error("[timeline] saveEdit failed:", msg);
+      setSaveError(msg);
     } finally {
       setSaving(false);
     }
@@ -182,6 +190,9 @@ export function Timeline({ clientId }: TimelineProps) {
                     disabled={saving}
                     className="w-full bg-bg-base border border-border-subtle rounded-sm p-2.5 text-[13px] sm:text-sm leading-relaxed text-text-primary focus:outline-none focus:border-border-strong focus:ring-1 focus:ring-border-strong resize-none"
                   />
+                  {saveError && (
+                    <p className="text-[11px] text-status-high-text">{saveError}</p>
+                  )}
                   <div className="flex gap-2 justify-end">
                     <button
                       onClick={cancelEditing}
