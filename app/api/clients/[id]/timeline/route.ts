@@ -144,6 +144,26 @@ export async function GET(
       }
     }
 
+    // Merge any worker edits from Supabase over the original Backboard messages
+    try {
+      const { data: edits } = await supabase
+        .from("note_edits")
+        .select("message_id, edited_content")
+        .eq("client_id", id);
+
+      if (edits && edits.length > 0) {
+        const editMap = new Map(edits.map((e) => [e.message_id, e.edited_content]));
+        for (const entry of entries) {
+          const override = editMap.get(entry.id);
+          if (override !== undefined) {
+            entry.ai_note = override;
+          }
+        }
+      }
+    } catch {
+      // note_edits table may not exist yet — serve raw Backboard messages
+    }
+
     return NextResponse.json({ entries });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

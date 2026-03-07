@@ -7,8 +7,9 @@ const limiter = rateLimit({ interval: 60_000, limit: 10 });
 
 /**
  * GET /api/clients/[id]/summary
- * Return the CACHED summary from Supabase — no Backboard call.
- * Summary is only regenerated on POST (after new note or edit).
+ * Return the CACHED summary from Supabase.
+ * Summary is force-regenerated on POST.
+ * This ensures manual summary edits persist.
  */
 export async function GET(
   _request: NextRequest,
@@ -60,6 +61,7 @@ export async function POST(
 
   try {
     const { id } = await params;
+    const refresh = request.nextUrl.searchParams.get("refresh") === "true";
     const supabase = createAdminClient();
 
     const { data: client, error } = await supabase

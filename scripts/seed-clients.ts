@@ -23,8 +23,18 @@ const WORKER_EMAILS = [
   "dhairyashah2513@gmail.com"
 ];
 
+const SUMMARY_PROMPT = `You are Waypoint, a case management assistant for municipal social workers.
+Based on everything you know about this client from all previous interactions:
+
+Generate an **actionable summary** in exactly this format:
+1. A 2-3 sentence overview of the client's CURRENT situation
+2. Their current risk level (LOW / MED / HIGH) with a brief justification
+3. 2-3 specific action items for the social worker's next visit
+
+Be factual, concise, and objective. Use present tense. Do not speculate.`;
+
 // Realistic seed data for municipal social workers
-// workerIndex determines which worker gets assigned (0 or 1)
+// workerIndex determines which worker gets assigned (0, 1, or 2)
 const SEED_CLIENTS = [
   {
     name: "Marcus Thorne",
@@ -84,9 +94,36 @@ const SEED_CLIENTS = [
 ];
 
 async function seed() {
-  console.log("🌱 Starting Waypoint Database Seed...");
+  console.log("🌱 Starting Waypoint Database Seed...\n");
 
-  // 1. Look up both workers by hardcoded email
+  // ── Step 0: Clean up stale data ──────────────────────────────────────────
+  // Remove old SQL-migration seed clients (no Backboard thread = not functional)
+  // and any previous script runs so we start fresh.
+  console.log("🧹 Cleaning up old seed data...");
+  const seedNames = SEED_CLIENTS.map(c => c.name);
+  const legacyNames = ["Alex Mercer", "Sam Riley", "Jamie Torres"];
+  const allNames = [...seedNames, ...legacyNames];
+
+  const { data: existing } = await supabase
+    .from("clients")
+    .select("id, name")
+    .in("name", allNames);
+
+  if (existing && existing.length > 0) {
+    const ids = existing.map(c => c.id);
+    // Clean up note_edits for these clients (if table exists)
+    try {
+      await supabase.from("note_edits").delete().in("client_id", ids);
+    } catch { /* table may not exist */ }
+    
+    await supabase.from("clients").delete().in("id", ids);
+    console.log(`  └─ Removed ${existing.length} existing clients: ${existing.map(c => c.name).join(", ")}`);
+  } else {
+    console.log("  └─ No stale data found");
+  }
+
+  // ── Step 1: Look up workers by email ─────────────────────────────────────
+  console.log("\n👤 Looking up workers...");
   const workerIds: (string | null)[] = [];
   for (const email of WORKER_EMAILS) {
     const { data: worker } = await supabase
@@ -96,25 +133,26 @@ async function seed() {
       .single();
     if (worker) {
       workerIds.push(worker.id);
-      console.log(`👤 Found worker for ${email}: ${worker.id}`);
+      console.log(`  └─ Found worker for ${email}: ${worker.id}`);
     } else {
       workerIds.push(null);
-      console.log(`⚠️ No worker found for ${email}`);
+      console.log(`  ⚠️ No worker found for ${email}`);
     }
   }
 
-  // 2. Process each client
+  // ── Step 2: Process each client ──────────────────────────────────────────
   for (const clientData of SEED_CLIENTS) {
     const workerId = workerIds[clientData.workerIndex] || null;
-    console.log(`\n⏳ Processing client: ${clientData.name} → assigned to ${WORKER_EMAILS[clientData.workerIndex]} (${workerId || "unassigned"})`);
+    console.log(`\n⏳ Processing client: ${clientData.name} → ${WORKER_EMAILS[clientData.workerIndex]} (${workerId || "unassigned"})`);
 
     try {
-      // Create Backboard thread
+      // 2a. Create Backboard thread
       console.log(`  └─ Creating Backboard thread...`);
       const thread = await createThread();
       const threadId = thread.thread_id;
+      console.log(`  └─ Thread created: ${threadId}`);
 
-      // Insert into Supabase
+      // 2b. Insert into Supabase (no summary yet — will be generated after notes)
       console.log(`  └─ Inserting into Supabase...`);
       const { data: dbClient, error: insertError } = await supabase
         .from("clients")
@@ -130,32 +168,57 @@ async function seed() {
         .single();
 
       if (insertError) throw insertError;
-      console.log(`  └─ Success! DB ID: ${dbClient.id}`);
+      console.log(`  └─ Supabase ID: ${dbClient.id}`);
 
-      // Seed historical notes into Backboard
-      console.log(`  └─ Seeding ${clientData.notes.length} historical notes into AI memory...`);
+      // 2c. Seed historical notes into Backboard thread
+      console.log(`  └─ Ingesting ${clientData.notes.length} notes into Backboard...`);
       
       for (const [index, note] of clientData.notes.entries()) {
-        // We use a mock date for realism: 7 days ago and 3 days ago
-        const daysAgo = clientData.notes.length - index * 4;
+        const daysAgo = (clientData.notes.length - index) * 4;
         const mockDate = new Date();
         mockDate.setDate(mockDate.getDate() - daysAgo);
         
-        const prompt = `[HISTORICAL CASE NOTE IMPORT]\nDate: ${mockDate.toISOString()}\n\nNote:\n${note}\n\nPlease ingest this historical record into the client's memory.`;
+        const prompt = `[HISTORICAL CASE NOTE IMPORT]\nDate: ${mockDate.toISOString()}\nClient: ${clientData.name}\n\nNote:\n${note}\n\nPlease ingest this historical record into the client's memory.`;
         
-        // Use flash config to save money/latency on bulk seed
         await sendMessageWithModel(threadId, prompt, GEMINI_FLASH_CONFIG, { memory: "Auto" });
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Rate limit pause
+        console.log(`     ✓ Note ${index + 1}/${clientData.notes.length} ingested`);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Rate limit pause
       }
 
-      console.log(`  └─ Done with ${clientData.name}`);
+      // 2d. Generate initial summary from Backboard and store in Supabase
+      console.log(`  └─ Generating AI summary...`);
+      const summaryResponse = await sendMessageWithModel(
+        threadId,
+        SUMMARY_PROMPT,
+        GEMINI_FLASH_CONFIG,
+        { memory: "Readonly" }
+      );
+
+      const summaryText = summaryResponse.content ?? "Summary generation pending.";
+
+      await supabase
+        .from("clients")
+        .update({
+          summary: summaryText,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", dbClient.id);
+
+      console.log(`  └─ Summary saved to Supabase ✓`);
+      console.log(`  ✅ Done with ${clientData.name}`);
+
+      // Pause between clients to avoid API rate limits
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
     } catch (err) {
       console.error(`❌ Error processing ${clientData.name}:`, err);
     }
   }
 
-  console.log("\n✅ Seeding complete.");
+  console.log("\n✅ Seeding complete! All clients have:");
+  console.log("  • A Supabase record with summary, tags, risk_level");
+  console.log("  • A Backboard thread with ingested case history");
+  console.log("  • An AI-generated summary cached in Supabase");
 }
 
 seed().catch(console.error);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Markdown } from "@/components/ui/markdown";
 
@@ -22,7 +22,6 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
   const [entries, setEntries] = useState<CaseNoteEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   // Expand/collapse state
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   // Editing state
@@ -30,6 +29,7 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Raw transcript visibility
   const [transcriptVisible, setTranscriptVisible] = useState<Set<string>>(new Set());
 
@@ -89,6 +89,7 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     setEditContent(entry.ai_note);
     // Make sure it's expanded
     setExpandedIds((prev) => new Set(prev).add(entry.id));
+    setTimeout(() => textareaRef.current?.focus(), 50);
   };
 
   const cancelEdit = () => {
@@ -105,7 +106,7 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
       const res = await fetch(`/api/clients/${clientId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editContent }),
+        body: JSON.stringify({ content: editContent, messageId: editingId }),
       });
 
       const data = await res.json();
@@ -291,6 +292,7 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
                 <div className="mt-2 text-[11px] font-mono text-status-low-text flex items-center gap-1">
                   <span>✓</span> Saved — summary updating
                 </div>
+
               )}
             </div>
           );
