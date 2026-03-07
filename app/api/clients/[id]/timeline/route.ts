@@ -145,6 +145,11 @@ export async function GET(
     // The note_edits table does not exist in this project.
     // Instead of overriding notes, we rely purely on the fact that we pushed the edit to backboard!
 
+    // Strip internal [RISK:...] tags from AI notes before sending to frontend
+    for (const entry of entries) {
+      entry.ai_note = entry.ai_note.replace(/\s*\[RISK:(?:LOW|MED|HIGH)\]\s*/g, "").trim();
+    }
+
     return NextResponse.json({ entries });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

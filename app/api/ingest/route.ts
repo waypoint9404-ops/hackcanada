@@ -8,6 +8,7 @@ import {
 import { regenerateSummary } from "@/lib/regenerate-summary";
 import { transcribeAudio } from "@/lib/elevenlabs";
 import { auth0 } from "@/lib/auth0";
+import { getCurrentWorkerId } from "@/lib/user-sync";
 
 /**
  * Extracts a phone number from text using regex to facilitate new client detection.
@@ -35,6 +36,8 @@ FORMAT:
 - Use professional, clinical, third-person language.
 - Be concise — include all verifiable details, exclude everything else.
 - Do NOT include the raw transcript itself.
+- At the very end of your response, on a new line, output EXACTLY one of these risk tags: [RISK:LOW] [RISK:MED] [RISK:HIGH]
+  Choose based on the factual severity: HIGH = immediate danger, legal jeopardy, or urgent medical need; MED = notable but non-urgent concerns; LOW = routine check-in with no red flags.
 
 Raw transcript:
 `;
@@ -50,6 +53,8 @@ export async function POST(request: NextRequest) {
     
     let clientId: string | undefined;
     let transcript: string = "";
+    let localTimestamp: string = "";
+    let timezone: string = "";
     let body: any = null;
     const contentType = request.headers.get("content-type") ?? "";
 
@@ -57,6 +62,8 @@ export async function POST(request: NextRequest) {
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
       clientId = formData.get("clientId") as string | undefined;
+      localTimestamp = (formData.get("localTimestamp") as string) || "";
+      timezone = (formData.get("timezone") as string) || "";
       const audioFile = formData.get("audio");
 
       if (audioFile instanceof Blob) {
@@ -70,6 +77,8 @@ export async function POST(request: NextRequest) {
     } else {
       body = await request.json();
       clientId = body.clientId;
+      localTimestamp = body.localTimestamp || "";
+      timezone = body.timezone || "";
       if (body.transcript) {
         transcript = body.transcript;
       }
@@ -105,7 +114,14 @@ export async function POST(request: NextRequest) {
         let newName = extractRes.content?.trim() || "Unknown Client";
         if (newName.length > 30) newName = "New Client"; // Safety check
 
-        const workerIds = session ? await supabase.from("users").select("id").eq("auth0_id", session.user.sub).single() : null;
+        let workerId: string | null = null;
+        if (session) {
+          try {
+            workerId = await getCurrentWorkerId(session.user.sub);
+          } catch (e) {
+            console.warn("Worker not found for auto-client creation:", session.user.sub);
+          }
+        }
 
         const thread = await createThread();
         const { data: newClient } = await supabase
@@ -114,7 +130,7 @@ export async function POST(request: NextRequest) {
             name: newName,
             phone: detectedPhone || null,
             backboard_thread_id: thread.thread_id,
-            assigned_worker_id: workerIds?.data?.id || null
+            assigned_worker_id: workerId
           })
           .select()
           .single();
@@ -130,13 +146,29 @@ export async function POST(request: NextRequest) {
     if (!client || !client.backboard_thread_id) return NextResponse.json({ error: "Invalid client state" }, { status: 400 });
 
     // 3. Process Note via Backboard with refined prompt
-    const prompt = `${NOTE_STRUCTURING_PROMPT}${transcript}`;
+    // Include the worker's local date/time so the AI uses correct timestamps
+    const timestampContext = localTimestamp
+      ? `\nWorker's local date/time: ${localTimestamp}${timezone ? ` (${timezone})` : ""}. Use this date for the note, NOT UTC.\n`
+      : "";
+    const prompt = `${NOTE_STRUCTURING_PROMPT}${timestampContext}${transcript}`;
     const response = await sendMessageWithModel(
       client.backboard_thread_id, 
       prompt, 
       GEMINI_FLASH_CONFIG, 
       { memory: "Auto" }
     );
+
+    // 3b. Extract risk level from AI response and update client record
+    const noteContent = response.content ?? "";
+    const riskMatch = noteContent.match(/\[RISK:(LOW|MED|HIGH)\]/);
+    const detectedRisk = riskMatch ? riskMatch[1] as "LOW" | "MED" | "HIGH" : null;
+
+    if (detectedRisk) {
+      await supabase
+        .from("clients")
+        .update({ risk_level: detectedRisk, updated_at: new Date().toISOString() })
+        .eq("id", clientId);
+    }
 
     // 4. Trigger summary regeneration (non-blocking error handling)
     try {
@@ -149,8 +181,9 @@ export async function POST(request: NextRequest) {
       success: true,
       clientId: client.id,
       clientName: client.name,
-      note: response.content,
+      note: noteContent.replace(/\[RISK:(LOW|MED|HIGH)\]/g, "").trim(),
       rawTranscript: transcript,
+      riskLevel: detectedRisk || client.risk_level,
       isNewClient: !request.headers.get("content-type")?.includes("multipart") && !body?.clientId
     });
 

@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Markdown } from "@/components/ui/markdown";
+import ReactMarkdown from "react-markdown";
+import dynamic from "next/dynamic";
+import { marked } from "marked";
+import TurndownService from "turndown";
+
+const WysiwygEditor = dynamic(() => import("react-simple-wysiwyg"), { ssr: false });
 
 interface CaseNoteEntry {
   id: string;
@@ -32,7 +37,6 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Raw transcript visibility
   const [transcriptVisible, setTranscriptVisible] = useState(false);
@@ -63,6 +67,13 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
 
   const handleExpand = (id: string) => {
     if (expandedId === id) {
+      const entry = entries.find(e => e.id === expandedId);
+      if (entry && isEditing && isDirty(entry)) {
+         if (window.confirm("You have unsaved changes. Do you want to save them now?")) {
+            handleSave(entry.id);
+            return;
+         }
+      }
       // Collapse
       setExpandedId(null);
       setIsEditing(false);
@@ -70,6 +81,14 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
       setTranscriptVisible(false);
       setSaveError(null);
     } else {
+      if (expandedId && isEditing) {
+         const oldEntry = entries.find(e => e.id === expandedId);
+         if (oldEntry && isDirty(oldEntry)) {
+            if (!window.confirm("You have unsaved changes in the open note. Discard them?")) {
+               return; // cancel expansion change
+            }
+         }
+      }
       setExpandedId(id);
       setIsEditing(false);
       setEditContent("");
@@ -78,17 +97,11 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     }
   };
 
-  const startEditing = (entry: CaseNoteEntry) => {
+  const startEditing = async (entry: CaseNoteEntry) => {
     setIsEditing(true);
-    setEditContent(entry.ai_note);
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        // Auto-resize to content
-        textareaRef.current.style.height = "auto";
-        textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
-      }
-    }, 30);
+    // Convert Markdown to HTML for the WYSIWYG editor
+    const htmlVal = await marked.parse(entry.ai_note);
+    setEditContent(htmlVal as string);
   };
 
   const cancelEditing = (entry: CaseNoteEntry) => {
@@ -98,7 +111,24 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
   };
 
   const isDirty = (entry: CaseNoteEntry) => {
-    return isEditing && editContent !== entry.ai_note;
+    if (!isEditing || !editContent) return false;
+    const turndownService = new TurndownService({ headingStyle: "atx", bulletListMarker: "*" });
+    const currentMarkdown = turndownService.turndown(editContent);
+    return currentMarkdown.trim() !== entry.ai_note.trim();
+  };
+
+  const handleClickOutside = (entry: CaseNoteEntry) => {
+    if (!isEditing) return;
+    
+    if (isDirty(entry)) {
+      if (window.confirm("You have unsaved changes. Do you want to save them now?")) {
+        handleSave(entry.id);
+      } else {
+        cancelEditing(entry);
+      }
+    } else {
+      cancelEditing(entry);
+    }
   };
 
   const handleSave = async (id: string) => {
@@ -108,11 +138,15 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     setSaveError(null);
     setSaveSuccess(null);
 
+    // Convert HTML back to clean Markdown
+    const turndownService = new TurndownService({ headingStyle: "atx", bulletListMarker: "*" });
+    const markdownContent = turndownService.turndown(editContent);
+
     try {
       const res = await fetch(`/api/clients/${clientId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editContent, messageId: id }),
+        body: JSON.stringify({ content: markdownContent, messageId: id }),
       });
 
       const raw = await res.text();
@@ -132,10 +166,9 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
 
       // Update the local entry optimistically
       setEntries((prev) =>
-        prev.map((e) => (e.id === id ? { ...e, ai_note: editContent, is_worker_edit: true } : e))
+        prev.map((e) => (e.id === id ? { ...e, ai_note: markdownContent, is_worker_edit: true } : e))
       );
 
-      fetchTimeline();
       onNoteEdited?.();
     } catch (err) {
       console.error("[Timeline] Save failed:", err);
@@ -143,13 +176,6 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     } finally {
       setSaving(false);
     }
-  };
-
-  // Auto-resize textarea on content change
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setEditContent(e.target.value);
-    e.target.style.height = "auto";
-    e.target.style.height = e.target.scrollHeight + "px";
   };
 
   if (loading) {
@@ -176,16 +202,25 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     );
   }
 
+  // Backboard returns UTC timestamps that may lack a 'Z' suffix.
+  // Ensure they're parsed as UTC so toLocale* methods convert to local time correctly.
+  const parseUTC = (ts: string): Date => {
+    // If the string already has timezone info (Z, +, or -offset), parse as-is
+    if (/Z|[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts);
+    // Otherwise append Z to force UTC interpretation
+    return new Date(ts + "Z");
+  };
+
   const formatDate = (ts: string | null) => {
-    if (!ts) return "—";
-    const d = new Date(ts);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    if (!ts) return "\u2014";
+    const d = parseUTC(ts);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
   const formatTime = (ts: string | null) => {
     if (!ts) return "";
-    const d = new Date(ts);
-    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const d = parseUTC(ts);
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   };
 
   // ── Expanded: full-width card takeover ────────────────────────────────────
@@ -263,19 +298,22 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
 
         {/* Note content — rendered markdown OR seamless edit textarea */}
         {isEditing ? (
-          <textarea
-            ref={textareaRef}
-            value={editContent}
-            onChange={handleTextareaChange}
-            disabled={saving}
-            className="note-edit-textarea"
-          />
+          <div className="w-full bg-white mb-4 rounded-sm border border-border-subtle shadow-sm overflow-hidden">
+             <WysiwygEditor
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                onBlur={() => handleClickOutside(entry)}
+                containerProps={{ style: { border: 'none', minHeight: '200px' } }}
+             />
+          </div>
         ) : (
           <div
             className="text-[13px] sm:text-sm text-text-secondary leading-relaxed break-words cursor-text"
             onClick={() => startEditing(entry)}
           >
-            <Markdown content={entry.ai_note} />
+            <div className="markdown-content">
+              <ReactMarkdown>{entry.ai_note}</ReactMarkdown>
+            </div>
           </div>
         )}
 
@@ -355,7 +393,9 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
                   isLong ? "note-content-collapsed" : ""
                 }`}
               >
-                <Markdown content={entry.ai_note} />
+                <div className="markdown-content">
+                  <ReactMarkdown>{entry.ai_note}</ReactMarkdown>
+                </div>
                 {isLong && <div className="note-fade-overlay" />}
               </div>
 
