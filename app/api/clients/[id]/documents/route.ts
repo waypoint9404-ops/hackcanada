@@ -3,9 +3,10 @@ import { auth0 } from "@/lib/auth0";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadDocument, getDocumentUrl } from "@/lib/supabase/storage";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
-import { classifyDocumentAction } from "@/lib/document-actions";
+import { classifyDocumentAction, type DocumentClassification } from "@/lib/document-actions";
 import {
   sendMessageWithModel,
+  addMemory,
   GEMINI_FLASH_CONFIG,
 } from "@/lib/backboard";
 import { regenerateSummary } from "@/lib/regenerate-summary";
@@ -17,23 +18,25 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const DOCUMENT_INGESTION_PROMPT = (
   clientName: string,
   filename: string,
-  classification: { action: string; reason: string },
+  classification: DocumentClassification,
   extractedText: string
 ) =>
   `[DOCUMENT UPLOAD] The following text was extracted from a document uploaded to ${clientName}'s case file.
 Document filename: ${filename}
-AI classification: ${classification.action.toUpperCase()} — ${classification.reason}
+AI classification: ${classification.action.toUpperCase()} — ${classification.reason}${classification.relatedTopic ? ` (Relates to: ${classification.relatedTopic})` : ""}
+
+You are a case-document ingestion agent for a social work case management system.
+Your job is to read this document and generate a structured case note.
 
 INSTRUCTIONS:
-- This document has been classified as a "${classification.action}" action for the case record.
-- Extract key facts: dates, agencies, people, deadlines, obligations, and risk indicators.
-- Generate a structured case note following the same factual, objective format as other case notes.
-- Use language like "Document states…", "According to the filing…", "The notice indicates…".
-- Do NOT speculate or infer beyond what the document explicitly states.
-- Start with a 1-2 sentence summary of what this document is and its significance to the case.
-- Follow with bullet points of key extracted facts.
-- If this relates to an existing issue in the case history, note the connection.
-- These notes may be subpoenaed — accuracy is legally critical.
+1. Identify the document type and source entity.
+2. Extract only objective, supportable facts. Do not speculate or infer beyond what is explicit.
+3. Identify dates, deadlines, status changes, agencies involved, and risk-relevant information.
+4. Compare the document against the client's existing case history/timeline for context.
+5. Generate a structured case note using subpoena-safe, factual language (e.g., "Document states...", "According to the filing...").
+6. The note should start with a 1-2 sentence summary of the document and its significance.
+7. Follow with bullet points of key extracted facts.
+8. If this relates to an existing issue, note the connection explicitly.
 
 Extracted document text:
 ${extractedText.slice(0, 15000)}`;
@@ -185,6 +188,35 @@ export async function POST(
 
     // Short AI summary (first 200 chars of the note)
     const aiSummary = aiNote.slice(0, 200) + (aiNote.length > 200 ? "..." : "");
+
+    // --- DUAL-CHANNEL MEMORY ---
+    // A. Explicit Memory (tagged for retrieval filtering)
+    try {
+      const aiSummaryFactual = aiNote.slice(0, 500);
+      await addMemory(`[DOCUMENT] ${filename} — ${docType}. Uploaded ${new Date().toISOString().split('T')[0]}. ${aiSummaryFactual}`, {
+        stream: "document",
+        document_type: docType,
+        filename: filename,
+        client_id: clientId,
+        action: classification.action,
+        related_topic: classification.relatedTopic,
+      });
+    } catch (memErr) {
+      console.error("[documents] Failed to add explicit memory:", memErr);
+    }
+
+    // B. Factual stream thread message (shorter, objective timeline entry)
+    try {
+      await sendMessageWithModel(
+        client.backboard_thread_id,
+        `[DOCUMENT FACTS] Raw extracted case data:\nFilename: ${filename}\nType: ${docType}\nAction: ${classification.action}\nSummary: ${aiSummary}`,
+        GEMINI_FLASH_CONFIG,
+        { memory: "Auto" }
+      );
+    } catch (factErr) {
+      console.error("[documents] Failed to add factual stream message:", factErr);
+    }
+    // ---------------------------
 
     // 5. Store document record in Supabase
     const { data: doc } = await supabase

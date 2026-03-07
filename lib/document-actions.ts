@@ -19,6 +19,7 @@ import {
 export interface DocumentClassification {
   action: "create" | "update";
   reason: string;
+  relatedTopic?: string;
 }
 
 const CLASSIFY_PROMPT = (filename: string, textExcerpt: string) =>
@@ -27,10 +28,16 @@ Based on the existing case history in this thread, should this newly uploaded do
 A) CREATE a new case note — it introduces a new development, a new issue, or new agency involvement
 B) UPDATE existing context — it adds evidence, changes a timeline, or confirms/contradicts existing information
 
+Examples:
+- Eviction notice -> CREATE housing risk note
+- Court reschedule letter -> UPDATE existing legal timeline
+- Hospital discharge paper -> CREATE or UPDATE care/support note
+- Benefits denial letter -> CREATE benefits issue or UPDATE financial note
+
 Respond with ONLY one line in this exact format:
 CREATE: <brief reason>
 or
-UPDATE: <brief reason>
+UPDATE [Topic it relates to]: <brief reason>
 
 Document excerpt (first 2000 characters):
 ${textExcerpt.slice(0, 2000)}`;
@@ -55,16 +62,19 @@ export async function classifyDocumentAction(
 
     const content = (response.content ?? "").trim();
     if (content.toUpperCase().startsWith("UPDATE")) {
+      const match = content.match(/^UPDATE\s*(?:\[(.*?)\])?\s*:\s*(.*)/i);
       return {
         action: "update",
-        reason: content.replace(/^UPDATE:\s*/i, "").trim() || "Updates existing case context",
+        relatedTopic: match?.[1]?.trim(),
+        reason: match?.[2]?.trim() || "Updates existing case context",
       };
     }
 
     // Default to "create" — safer to surface a new note than miss one
+    const match = content.match(/^CREATE\s*:\s*(.*)/i);
     return {
       action: "create",
-      reason: content.replace(/^CREATE:\s*/i, "").trim() || "Introduces new information",
+      reason: match?.[1]?.trim() || "Introduces new information",
     };
   } catch (err) {
     console.error("[document-actions] Classification failed:", err);

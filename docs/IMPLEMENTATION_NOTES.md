@@ -25,6 +25,12 @@ Due to potential rate-limiting or quota exhaustion on the free ElevenLabs tier, 
 *   **Audio Recap:** If `/api/recap` fails to generate audio, it returns a `warning` flag and a `recapText` string. The `<AudioRecap>` component detects this and renders a distinct "Text Fallback" UI.
 *   **Voice Ingestion:** The `<VoiceRecorder>` component features a toggle between "Voice" (MediaRecorder) and "Text Entry" modes. If STT fails or the user is in a loud environment, they can paste text notes directly.
 
+### 3. Case Document Ingestion with Backboard
+Each client has a dedicated Backboard thread that serves as the persistent memory layer for that case.
+*   **Pipeline:** Uploaded PDFs are stored securely. Text is extracted and an AI classification identifies if it introduces a new issue (CREATE) or adds evidence (UPDATE).
+*   **Dual-Channel Memory:** The ingestion triggers a prompt generating a structured note added to the thread. Simultaneously, a metadata-tagged entry (`addMemory` with `{ stream: "document" }`) is saved directly to Backboard for focused retrieval filtering.
+*   **Re-evaluation:** After ingestion, the background job immediately forces a regeneration of the actionable summary and reassesses the `risk_level` (LOW/MED/HIGH) based on the new findings.
+
 ## Design System
 
 The application leverages a bespoke utility-class configuration via Tailwind CSS v4 (`app/globals.css`). It strictly follows a unified Alabaster color palette (no dark mode), ensuring high contrast and optimal legibility outdoors. The typography pairs Instrument Serif for major headings with Geist sans/mono for UI elements. Status badges (HIGH/MED/LOW) use specifically calibrated, desaturated "dusty" colors (e.g., `#B92B27` for high risk) rather than generic red/yellow/green.

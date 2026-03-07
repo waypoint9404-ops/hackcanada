@@ -100,6 +100,7 @@ export async function GET(
             content.includes("Extract the full name") ||
             content.startsWith("You are Waypoint") ||
             content.startsWith("[Q&A]") ||
+            content.startsWith("[DOCUMENT FACTS]") ||
             content.startsWith("[DOCUMENT CLASSIFICATION");
           
           if (isSummaryPrompt) {

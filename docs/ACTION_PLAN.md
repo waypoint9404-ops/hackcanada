@@ -103,6 +103,23 @@ This document outlines the actionable, high-level steps to take Waypoint from 0 
 
 ---
 
+## Phase 8: Document Ingestion & Case Memory
+*Goal: Elevate documents to first-class case memory inputs alongside calls and visits.*
+
+1. **Document Storage & Upload API**
+   - Create secure Supabase object storage bucket (`case-documents`).
+   - Add frontend `<DocumentUpload>` and `<DocumentList>` components on the client detail page.
+2. **Text Extraction & Classification**
+   - Extract text from PDFs/documents via `pdf-parse` or similar.
+   - Run AI classification to decide if the document translates into a CREATE (new issue) or UPDATE (adding context to an existing note).
+3. **Dual-Channel Memory Architecture**
+   - Incorporate `addMemory()` to write structured factual metadata (document stream) to Backboard explicitly for robust retrieval filtering.
+   - Dispatch `[DOCUMENT FACTS]` and a full synthesized prose case note into the persistent Backboard thread.
+4. **Summary & Risk Re-evaluation**
+   - Force trigger summary regeneration immediately after document ingestion to adjust `risk_level` (LOW/MED/HIGH) strictly based on the extracted contents.
+
+---
+
 ## Unresolved Considerations & Future-Proofing
 - **HIPAA/Compliance Storage:** Evaluate if audio recordings are stored temporarily in memory during ingestion or if they require an encrypted bucket in Supabase. For the MVP, recommend processing in-memory and discarding the audio buffer after transcription.
 - **Offline Capabilities:** As a PWA meant for on-the-go workers, consider implementing basic optimistic UI updates and service-worker caching for read-only access in zero-connectivity zones (e.g., apartment building basements).
