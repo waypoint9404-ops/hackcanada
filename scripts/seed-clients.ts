@@ -16,13 +16,22 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Hardcoded worker emails
+const WORKER_EMAILS = [
+  "aamirfiretv777@gmail.com",
+  "dhimanishaan7@gmail.com",
+  "dhairyashah2513@gmail.com"
+];
+
 // Realistic seed data for municipal social workers
+// workerIndex determines which worker gets assigned (0 or 1)
 const SEED_CLIENTS = [
   {
     name: "Marcus Thorne",
     phone: "+1 (416) 555-0891",
     tags: ["HOUSING", "MENTAL_HEALTH"],
     risk_level: "HIGH",
+    workerIndex: 0,
     notes: [
       "Met Marcus near the underpass on King St. He was highly agitated, pacing erratically. Claims he hasn't slept in 3 days. Refused offer for shelter bed, citing safety concerns. Gave him a harm reduction kit and water.",
       "Follow-up: Marcus is calmer today. Says he lost his ID last week which is preventing him from accessing his OW payments. Agreed to meet tomorrow morning to start the ID replacement process at the community center."
@@ -33,6 +42,7 @@ const SEED_CLIENTS = [
     phone: "+1 (416) 555-0234",
     tags: ["EMPLOYMENT", "LEGAL"],
     risk_level: "LOW",
+    workerIndex: 0,
     notes: [
       "Initial intake: Elena recently lost her job at the processing plant due to restructuring. Facing potential eviction next month if she can't make rent. Needs help navigating EI application.",
       "Assisted Elena with submitting EI forms online. Also provided a referral to Legal Aid regarding a dispute with her previous landlord over a damage deposit."
@@ -43,6 +53,7 @@ const SEED_CLIENTS = [
     phone: "+1 (416) 555-0788",
     tags: ["SUBSTANCE_USE", "MEDICAL"],
     risk_level: "MED",
+    workerIndex: 1,
     notes: [
       "Visited David at his supported housing unit. He looks pale and reports a persistent cough. Admits he relapsed over the weekend after 2 months sober. Needs a doctor's appointment.",
       "Accompanied David to the walk-in clinic. Diagnosed with a mild chest infection, prescribed antibiotics. He expressed desire to return to the weekly support group; provided him with the updated schedule."
@@ -53,6 +64,7 @@ const SEED_CLIENTS = [
     phone: "+1 (416) 555-0445",
     tags: ["HOUSING", "FAMILY_SUPPORT"],
     risk_level: "MED",
+    workerIndex: 1,
     notes: [
       "Family of four currently staying in the municipal family shelter. Sarah is stressed about finding stable housing before the school year starts for her eldest daughter.",
       "Completed the centralized housing waitlist application. Discussed school enrollment strategies for the kids while they are in temporary housing."
@@ -63,6 +75,7 @@ const SEED_CLIENTS = [
     phone: null,
     tags: ["YOUTH", "SUBSTANCE_USE"],
     risk_level: "HIGH",
+    workerIndex: 0,
     notes: [
       "Street outreach encounter at the park. JD (19yo) was found sleeping on a bench. Seemed disoriented, possible intoxication. Provided a snack and a sleeping bag.",
       "Saw JD again in the youth drop-in center. He engaged in conversation today. Mentioned he left his foster home 3 months ago. Introduced him to the youth housing navigator."
@@ -73,19 +86,27 @@ const SEED_CLIENTS = [
 async function seed() {
   console.log("🌱 Starting Waypoint Database Seed...");
 
-  // 1. Get the first worker (or null if none) to assign these clients
-  const { data: worker } = await supabase.from("users").select("id").limit(1).single();
-  const workerId = worker?.id || null;
-
-  if (workerId) {
-    console.log(`👤 Assigning clients to worker ID: ${workerId}`);
-  } else {
-    console.log(`⚠️ No workers found in 'users' table. Clients will be unassigned.`);
+  // 1. Look up both workers by hardcoded email
+  const workerIds: (string | null)[] = [];
+  for (const email of WORKER_EMAILS) {
+    const { data: worker } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single();
+    if (worker) {
+      workerIds.push(worker.id);
+      console.log(`👤 Found worker for ${email}: ${worker.id}`);
+    } else {
+      workerIds.push(null);
+      console.log(`⚠️ No worker found for ${email}`);
+    }
   }
 
   // 2. Process each client
   for (const clientData of SEED_CLIENTS) {
-    console.log(`\n⏳ Processing client: ${clientData.name}`);
+    const workerId = workerIds[clientData.workerIndex] || null;
+    console.log(`\n⏳ Processing client: ${clientData.name} → assigned to ${WORKER_EMAILS[clientData.workerIndex]} (${workerId || "unassigned"})`);
 
     try {
       // Create Backboard thread
