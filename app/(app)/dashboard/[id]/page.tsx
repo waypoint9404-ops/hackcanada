@@ -64,6 +64,11 @@ export default function ClientDetailPage({
     setRecorderOpen(false); // Close recorder
     setPendingNote(data.note || "No note generated"); // Prep the review modal
     
+    // Update risk level immediately if the AI detected a change
+    if (data.riskLevel && client) {
+      setClient({ ...client, risk_level: data.riskLevel });
+    }
+    
     // Slight delay for animation smoothness before opening review modal
     setTimeout(() => {
       setReviewOpen(true);

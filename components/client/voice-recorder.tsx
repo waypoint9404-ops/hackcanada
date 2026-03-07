@@ -71,6 +71,8 @@ export function VoiceRecorder({ clientId, open, onClose, onIngestSuccess }: Voic
       const formData = new FormData();
       formData.append("audio", blob, "recording.webm");
       if (clientId) formData.append("clientId", clientId);
+      formData.append("localTimestamp", new Date().toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" }));
+      formData.append("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
 
       const res = await fetch("/api/ingest", {
         method: "POST",
@@ -99,7 +101,9 @@ export function VoiceRecorder({ clientId, open, onClose, onIngestSuccess }: Voic
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           ...(clientId ? { clientId } : {}), 
-          transcript: transcriptText 
+          transcript: transcriptText,
+          localTimestamp: new Date().toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" }),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
 

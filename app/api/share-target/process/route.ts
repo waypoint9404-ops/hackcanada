@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { shareId, clientId: requestedClientId } = body;
+    const { shareId, clientId: requestedClientId, localTimestamp, timezone } = body;
 
     if (!shareId) {
       return NextResponse.json(
@@ -148,9 +148,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = `You are a factual case-note extraction agent. Extract ONLY objective, verifiable facts from this transcript. NEVER infer emotions, motivations, or conditions unless explicitly stated. Report only what was directly observed, stated, or done. These notes may be subpoenaed — accuracy is legally critical.
-
-New case note for ${client.name}:\n\n${transcript}\n\nRespond with a structured factual note: a 1-2 sentence summary (who, where, when, what), then bullet points of direct statements, observed conditions, actions taken, and follow-up commitments. Nothing more.`;
+    const tsContext = localTimestamp ? `\nWorker's local date/time: ${localTimestamp}${timezone ? ` (${timezone})` : ""}. Use this date for the note, NOT UTC.\n` : "";
+    const prompt = `You are a factual case-note extraction agent. Extract ONLY objective, verifiable facts from this transcript. NEVER infer emotions, motivations, or conditions unless explicitly stated. Report only what was directly observed, stated, or done. These notes may be subpoenaed — accuracy is legally critical.\n${tsContext}\nNew case note for ${client.name}:\n\n${transcript}\n\nRespond with a structured factual note: a 1-2 sentence summary (who, where, when, what), then bullet points of direct statements, observed conditions, actions taken, and follow-up commitments. Nothing more.`;
     const response = await sendMessageWithModel(
       client.backboard_thread_id,
       prompt,

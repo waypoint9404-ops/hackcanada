@@ -165,6 +165,11 @@ export async function GET(
       // note_edits table may not exist yet — serve raw Backboard messages
     }
 
+    // Strip internal [RISK:...] tags from AI notes before sending to frontend
+    for (const entry of entries) {
+      entry.ai_note = entry.ai_note.replace(/\s*\[RISK:(?:LOW|MED|HIGH)\]\s*/g, "").trim();
+    }
+
     return NextResponse.json({ entries });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
