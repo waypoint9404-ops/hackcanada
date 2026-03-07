@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { use, useState, useCallback, useEffect } from "react";
@@ -191,6 +192,17 @@ export default function ClientDetailPage({
           <AudioRecap clientId={client.id} />
         </section>
 
+        {/* Record Visit Button */}
+        <section>
+          <button
+            onClick={() => setRecorderOpen(true)}
+            className="w-full py-3 bg-accent-primary text-black rounded-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-accent-hover transition-colors shadow-sm"
+          >
+            <span className="text-lg">🎤</span>
+            <span className="text-sm font-medium">Record Visit</span>
+          </button>
+        </section>
+
         {/* Timeline of History */}
         <section>
           <h2 className="text-sm font-medium text-text-secondary uppercase tracking-widest font-mono mb-4">
@@ -209,15 +221,6 @@ export default function ClientDetailPage({
         </section>
         
       </div>
-
-      {/* Floating Action Button for Recorder */}
-      <button
-        onClick={() => setRecorderOpen(true)}
-        className="fixed bottom-20 right-5 w-14 h-14 bg-accent-primary text-white rounded-full flex items-center justify-center shadow-float cursor-pointer hover:bg-accent-hover transition-colors z-20 group"
-        aria-label="Record Visit"
-      >
-        <span className="text-2xl group-active:scale-95 transition-transform">🎤</span>
-      </button>
 
       {/* Bottom Sheets / Modals */}
       <VoiceRecorder

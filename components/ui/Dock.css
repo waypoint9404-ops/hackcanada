@@ -8,6 +8,7 @@
   left: 50%;
   transform: translateX(-50%);
   pointer-events: none; /* allow clicking through empty space */
+  z-index: 30;
 }
 
 .dock-panel {
