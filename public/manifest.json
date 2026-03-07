@@ -2,20 +2,48 @@
   "name": "Waypoint",
   "short_name": "Waypoint",
   "description": "Municipal Outreach Case Management — Designed for social workers on the go.",
+  "id": "/",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#F9F8F6",
   "theme_color": "#F9F8F6",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
       "src": "/waypoint_pwa_icon_1772889865943.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/waypoint_pwa_icon_1772889865943.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/waypoint_pwa_icon_1772889865943.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/api/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "audio",
+          "accept": ["audio/*", ".mp3", ".m4a", ".wav", ".ogg", ".webm", ".aac", ".mp4"]
+        }
+      ]
+    }
+  }
 }

@@ -10,7 +10,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Public routes — no session required
-  const publicPaths = ["/", "/api/auth"];
+  const publicPaths = ["/", "/api/auth", "/api/share-target"];
   const isPublic = publicPaths.some(
     (p) =>
       request.nextUrl.pathname === p ||
@@ -50,6 +50,6 @@ export const config = {
      * - favicon.ico, icons, manifest
      * - public assets
      */
-    "/((?!_next/static|_next/image|favicon\\.ico|icons/|manifest\\.json|.*\\.svg$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|icons/|manifest\\.json|sw\\.js|workbox-|.*\\.svg$).*)",
   ],
 };
