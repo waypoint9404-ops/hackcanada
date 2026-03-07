@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const tabs = [
-  { href: "/dashboard", label: "Clients", icon: "📇" },
-  { href: "/profile", label: "Profile", icon: "👤" },
-];
+import { Users, UserCircle } from "lucide-react";
 
 export function BottomNav() {
   const pathname = usePathname();
+
+  const tabs = [
+    { href: "/dashboard", label: "Clients", icon: Users },
+    { href: "/profile", label: "Profile", icon: UserCircle },
+  ];
 
   return (
     <nav
@@ -20,17 +21,22 @@ export function BottomNav() {
         {tabs.map((tab) => {
           const isActive =
             pathname === tab.href || pathname.startsWith(tab.href + "/");
+          const Icon = tab.icon;
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 min-h-[56px] text-center transition-expo transition-colors ${
+              className={`flex-1 flex flex-col items-center justify-center gap-1.5 py-3 min-h-[56px] text-center transition-expo transition-colors ${
                 isActive
                   ? "text-accent"
                   : "text-text-tertiary hover:text-text-secondary"
               }`}
             >
-              <span className="text-lg leading-none">{tab.icon}</span>
+              <Icon 
+                size={22} 
+                strokeWidth={isActive ? 2.5 : 2} 
+                className={isActive ? "text-accent" : ""} 
+              />
               <span
                 className="text-[0.625rem] font-medium tracking-wide uppercase"
                 style={{ fontFamily: "var(--font-mono)" }}
