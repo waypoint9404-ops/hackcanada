@@ -15,15 +15,27 @@ interface CaseNoteEntry {
   raw_transcript: string | null;
   timestamp: string | null;
   is_worker_edit: boolean;
+  source?: "call" | "document";
+  document_filename?: string;
+  document_id?: string;
+  file_size_bytes?: number;
+  download_url?: string;
 }
 
 interface TimelineProps {
   clientId: string;
   onNoteEdited?: () => void;
   refreshKey?: number;
+  filter?: "all" | "notes" | "documents";
 }
 
-export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) {
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }: TimelineProps) {
   const [entries, setEntries] = useState<CaseNoteEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +52,30 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
 
   // Raw transcript visibility
   const [transcriptVisible, setTranscriptVisible] = useState(false);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+
+  const handleDeleteDocument = async (docId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (deletingDocId) return;
+    if (!window.confirm("Are you sure you want to delete this document? The AI summary might remain.")) return;
+    
+    setDeletingDocId(docId);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/documents/${docId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Delete failed");
+      }
+      fetchTimeline(); 
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Error deleting document");
+    } finally {
+      setDeletingDocId(null);
+    }
+  };
 
   const fetchTimeline = useCallback(async () => {
     try {
@@ -194,7 +230,13 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     return <p className="text-sm text-status-high-text py-4">{error}</p>;
   }
 
-  if (entries.length === 0) {
+  const filteredEntries = entries.filter((entry) => {
+    if (filter === "notes") return entry.source !== "document";
+    if (filter === "documents") return entry.source === "document";
+    return true;
+  });
+
+  if (filteredEntries.length === 0) {
     return (
       <p className="text-sm text-text-secondary py-8 text-center italic">
         No case history recorded yet.
@@ -318,7 +360,7 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
         )}
 
         {/* Action bar */}
-        <div className="flex items-center gap-3 mt-4 pt-3 border-t border-border-subtle">
+        <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-border-subtle">
           {!isEditing && (
             <button
               onClick={() => startEditing(entry)}
@@ -335,6 +377,30 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
             >
               {transcriptVisible ? "Hide Transcript" : "View Raw Transcript"}
             </button>
+          )}
+
+          {entry.source === "document" && entry.document_id && (
+            <div className="flex items-center gap-3 text-[11px] font-mono text-text-tertiary ml-auto">
+              {entry.file_size_bytes && <span>{formatFileSize(entry.file_size_bytes)}</span>}
+              {entry.download_url && (
+                <a
+                  href={entry.download_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent hover:underline cursor-pointer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Download
+                </a>
+              )}
+              <button
+                onClick={(e) => handleDeleteDocument(entry.document_id!, e)}
+                disabled={deletingDocId === entry.document_id}
+                className="text-text-tertiary hover:text-status-high-text transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {deletingDocId === entry.document_id ? "..." : "Delete"}
+              </button>
+            </div>
           )}
         </div>
 
@@ -357,7 +423,7 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
   return (
     <div className="case-history-container">
       <div className="case-history-scroll">
-        {entries.map((entry) => {
+        {filteredEntries.map((entry) => {
           const justSaved = saveSuccess === entry.id;
           const isLong = entry.ai_note.length > 200;
 
@@ -374,6 +440,14 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
                   {entry.is_worker_edit ? (
                     <span className="text-accent font-semibold flex items-center gap-1">
                       <span>✏️</span> Edited Note
+                    </span>
+                  ) : entry.source === "document" ? (
+                    <span className="text-accent-ai font-semibold flex items-center gap-1">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
+                      {entry.document_filename ? `Doc: ${entry.document_filename}` : "Document Note"}
                     </span>
                   ) : (
                     <span className="text-accent-ai font-semibold">AI Note</span>
@@ -398,6 +472,31 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
                 </div>
                 {isLong && <div className="note-fade-overlay" />}
               </div>
+
+              {/* Document actions */}
+              {entry.source === "document" && entry.document_id && (
+                <div className="mt-3 flex items-center gap-3 text-[10px] font-mono text-text-tertiary pt-2 border-t border-border-subtle border-dashed">
+                  {entry.file_size_bytes && <span>{formatFileSize(entry.file_size_bytes)}</span>}
+                  {entry.download_url && (
+                    <a
+                      href={entry.download_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-accent hover:underline cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Download
+                    </a>
+                  )}
+                  <button
+                    onClick={(e) => handleDeleteDocument(entry.document_id!, e)}
+                    disabled={deletingDocId === entry.document_id}
+                    className="text-text-tertiary hover:text-status-high-text transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {deletingDocId === entry.document_id ? "..." : "Delete"}
+                  </button>
+                </div>
+              )}
 
 
 

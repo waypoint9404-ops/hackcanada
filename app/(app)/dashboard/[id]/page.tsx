@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { use, useState, useCallback, useEffect } from "react";
+import { use, useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { StatusBadge, TagBadge } from "@/components/ui/badge";
@@ -11,6 +11,8 @@ import { AudioRecap } from "@/components/client/audio-recap";
 import { QAChat } from "@/components/client/qa-chat";
 import { VoiceRecorder } from "@/components/client/voice-recorder";
 import { NoteReviewModal } from "@/components/client/note-review";
+import { DocumentUpload } from "@/components/client/document-upload";
+import { Button } from "@/components/ui/button";
 
 // The data structure returned by the initial server fetch
 interface ClientData {
@@ -39,6 +41,25 @@ export default function ClientDetailPage({
   
   // Data passed from Recorder → Review modal
   const [pendingNote, setPendingNote] = useState("");
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [activeSection, setActiveSection] = useState<0 | 1>(0);
+  const [historyFilter, setHistoryFilter] = useState<"all" | "notes" | "documents">("all");
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollPosition = target.scrollLeft;
+    const width = target.clientWidth;
+    const index = Math.round(scrollPosition / width);
+    setActiveSection(index as 0 | 1);
+  };
+
+  const scrollToSection = (index: number) => {
+    if (scrollContainerRef.current) {
+      const width = scrollContainerRef.current.clientWidth;
+      scrollContainerRef.current.scrollTo({ left: width * index, behavior: 'smooth' });
+    }
+  };
 
   // Version counter to force refresh of summary + timeline after changes
   const [dataVersion, setDataVersion] = useState(0);
@@ -88,6 +109,12 @@ export default function ClientDetailPage({
   // Handle note edit from the Timeline component
   const handleNoteEdited = () => {
     setDataVersion((v) => v + 1);
+  };
+
+  // Handle document upload completion
+  const handleDocumentProcessed = () => {
+    setDataVersion((v) => v + 1);
+    fetchClientData();
   };
 
   const handleDelete = async () => {
@@ -182,42 +209,96 @@ export default function ClientDetailPage({
       {/* Main Content Area */}
       <div className="px-5 flex flex-col gap-8 flex-1">
         
-        {/* Actionable Summary (cached from Supabase, refreshes on note changes) */}
-        <section>
-          <ActionableSummary clientId={client.id} refreshKey={dataVersion} />
-        </section>
-
-        {/* Audio Recap Generator */}
-        <section>
-          <AudioRecap clientId={client.id} />
-        </section>
-
-        {/* Record Visit Button */}
-        <section>
-          <button
-            onClick={() => setRecorderOpen(true)}
-            className="w-full py-3 bg-white text-black rounded-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-accent-hover transition-colors font-medium"
+        {/* Summary & QA Carousel */}
+        <section className="flex flex-col relative w-full overflow-hidden">
+          <div 
+            ref={scrollContainerRef}
+            onScroll={handleScroll}
+            className="flex items-stretch overflow-x-auto snap-x snap-mandatory scroll-smooth [&::-webkit-scrollbar]:hidden pb-1"
+            style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }}
           >
-            <span className="text-lg">🎤</span>
-            <span className="text-sm font-medium">Record Visit</span>
-          </button>
+            <div className="min-w-full w-full snap-center shrink-0 pr-4 flex flex-col">
+              <ActionableSummary clientId={client.id} refreshKey={dataVersion} />
+            </div>
+            <div className="min-w-full w-full snap-start shrink-0 flex flex-col">
+              <QAChat clientId={client.id} />
+            </div>
+          </div>
+          
+          {/* Carousel Indicators */}
+          <div className="flex justify-center items-center gap-1 mt-1 mb-1">
+            <button 
+              onClick={() => scrollToSection(0)}
+              className="p-2 cursor-pointer group"
+              aria-label="View Actionable Summary"
+            >
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${activeSection === 0 ? "w-4 bg-text-secondary" : "w-1.5 bg-border-subtle group-hover:bg-text-secondary/50"}`} />
+            </button>
+            <button 
+              onClick={() => scrollToSection(1)}
+              className="p-2 cursor-pointer group"
+              aria-label="View Case Q&A"
+            >
+              <div className={`h-1.5 rounded-full transition-all duration-300 ${activeSection === 1 ? "w-4 bg-text-secondary" : "w-1.5 bg-border-subtle group-hover:bg-text-secondary/50"}`} />
+            </button>
+          </div>
+        </section>
+
+        {/* Audio Recap & Record Visit */}
+        <section className="flex flex-col gap-2">
+          <AudioRecap clientId={client.id} />
+          
+          <Button
+            variant="secondary"
+            onClick={() => setRecorderOpen(true)}
+            className="w-full flex items-center justify-center gap-2"
+          >
+            <span className="text-xl">🎤</span>
+            Record Visit
+          </Button>
+        </section>
+
+        {/* Case Documents */}
+        <section>
+          <DocumentUpload
+            clientId={client.id}
+            onDocumentProcessed={handleDocumentProcessed}
+          />
         </section>
 
         {/* Timeline of History */}
         <section>
-          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-widest font-mono mb-4">
-            Case History
-          </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+            <h2 className="text-sm font-medium text-text-secondary uppercase tracking-widest font-mono">
+              Case History
+            </h2>
+            <div className="flex bg-bg-surface border border-border-subtle rounded-sm p-0.5">
+              <button
+                onClick={() => setHistoryFilter('all')}
+                className={`flex-1 sm:flex-none px-3 py-1 text-[11px] font-mono uppercase tracking-wider rounded-sm transition-colors ${historyFilter === 'all' ? 'bg-bg-elevated text-text-primary shadow-sm' : 'text-text-tertiary hover:text-text-secondary'}`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setHistoryFilter('notes')}
+                className={`flex-1 sm:flex-none px-3 py-1 text-[11px] font-mono uppercase tracking-wider rounded-sm transition-colors ${historyFilter === 'notes' ? 'bg-bg-elevated text-text-primary shadow-sm' : 'text-text-tertiary hover:text-text-secondary'}`}
+              >
+                Notes
+              </button>
+              <button
+                onClick={() => setHistoryFilter('documents')}
+                className={`flex-1 sm:flex-none px-3 py-1 text-[11px] font-mono uppercase tracking-wider rounded-sm transition-colors ${historyFilter === 'documents' ? 'bg-bg-elevated text-text-primary shadow-sm' : 'text-text-tertiary hover:text-text-secondary'}`}
+              >
+                Docs
+              </button>
+            </div>
+          </div>
           <Timeline
             clientId={client.id}
             refreshKey={dataVersion}
             onNoteEdited={handleNoteEdited}
+            filter={historyFilter}
           />
-        </section>
-
-        {/* Q&A Chat */}
-        <section className="mt-8">
-          <QAChat clientId={client.id} />
         </section>
         
       </div>

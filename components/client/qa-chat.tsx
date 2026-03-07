@@ -21,7 +21,9 @@ export function QAChat({ clientId }: QAChatProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 0 || loading) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
   }, [messages, loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,14 +77,14 @@ export function QAChat({ clientId }: QAChatProps) {
   };
 
   return (
-    <div className="flex flex-col border border-border-subtle rounded-sm bg-bg-surface overflow-hidden">
-      <div className="bg-bg-elevated px-4 py-2 border-b border-border-subtle">
+    <div className="flex flex-col flex-1 border border-border-subtle rounded-sm bg-bg-surface overflow-hidden">
+      <div className="bg-bg-elevated px-4 py-2 border-b border-border-subtle shrink-0">
         <h3 className="text-sm font-medium text-text-primary flex items-center gap-2">
            Case Q&A
         </h3>
       </div>
 
-      <div className="flex-1 max-h-[300px] overflow-y-auto p-4 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         {messages.length === 0 ? (
           <p className="text-xs text-text-tertiary text-center my-8 italic">
             Ask questions about this client's history.
@@ -119,7 +121,7 @@ export function QAChat({ clientId }: QAChatProps) {
         <div ref={bottomRef} className="h-1" />
       </div>
 
-      <form onSubmit={handleSubmit} className="p-2 border-t border-border-subtle bg-bg-base flex gap-2">
+      <form onSubmit={handleSubmit} className="p-2 border-t border-border-subtle bg-bg-base flex gap-2 shrink-0">
         <input
           type="text"
           value={input}

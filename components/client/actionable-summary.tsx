@@ -63,7 +63,7 @@ export function ActionableSummary({ clientId, refreshKey }: ActionableSummaryPro
   }
 
   return (
-    <div className="bg-accent-ai-light p-4 rounded-sm border border-accent-ai/20 shadow-sm relative overflow-hidden">
+    <div className="bg-accent-ai-light p-4 rounded-sm border border-accent-ai/20 shadow-sm relative overflow-hidden flex-1 flex flex-col">
       {/* Decorative accent line */}
       <div className="absolute top-0 left-0 w-1 h-full bg-accent-ai opacity-50" />
 

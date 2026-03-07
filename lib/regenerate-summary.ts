@@ -10,24 +10,22 @@ import {
 } from "@/lib/backboard";
 
 const SUMMARY_PROMPT = `You are Waypoint, a case management assistant for municipal social workers.
-Based on everything you know about this client from all previous interactions, generate an actionable summary.
+Based on everything you know about this client from all previous interactions and documents, generate an actionable summary and assess their current risk level.
 
 FORMAT RULES (strict):
-- Output ONLY 3–5 concise bullet points
-- Each bullet must be a short, actionable sentence (1 line max)
-- Cover: current situation, immediate risks, and next steps for the social worker
-- Use present tense. Be factual and objective. Do not speculate.
-- Do NOT include headings, titles, numbering, or narrative paragraphs — just bullet points.
+- Output MUST be exactly two parts separated by "|||"
+- Part 1: Risk Level. Exactly one word: "LOW", "MED", or "HIGH"
+- Part 2: The Actionable Summary. ONLY 3–5 concise bullet points. Each bullet highly actionable (1 line max). Cover: current situation, immediate risks, next steps. Do not use narrative paragraphs.
 
 Example output:
+HIGH
+|||
 • Client is currently staying at municipal shelter on Elm St, lease application pending
 • Risk elevated due to missed medication appointments last two weeks
-• Follow up with Dr. Patel at community clinic re: prescription renewal
-• Connect client with legal aid for upcoming court date on March 15
-• Housing voucher application submitted — check status at next visit`;
+• Follow up with Dr. Patel at community clinic re: prescription renewal`;
 
 /**
- * Regenerate the actionable summary for a client and cache it in Supabase.
+ * Regenerate the actionable summary for a client, reassess risk, and cache them in Supabase.
  * Returns the new summary text.
  */
 export async function regenerateSummary(
@@ -41,7 +39,21 @@ export async function regenerateSummary(
     { memory: "Readonly" }
   );
 
-  const summaryText = response.content ?? "Unable to generate summary.";
+  const content = response.content ?? "LOW|||Unable to generate summary.";
+  const parts = content.split("|||");
+  
+  let riskLevel = "LOW";
+  let summaryText = "Unable to generate summary.";
+
+  if (parts.length >= 2) {
+    const parsedRisk = parts[0].trim().toUpperCase();
+    if (parsedRisk === "HIGH" || parsedRisk === "MED" || parsedRisk === "LOW") {
+      riskLevel = parsedRisk;
+    }
+    summaryText = parts.slice(1).join("|||").trim();
+  } else {
+    summaryText = content.trim();
+  }
 
   // Cache in Supabase
   const supabase = createAdminClient();
@@ -49,6 +61,7 @@ export async function regenerateSummary(
     .from("clients")
     .update({
       summary: summaryText,
+      risk_level: riskLevel,
       updated_at: new Date().toISOString(),
     })
     .eq("id", clientId);

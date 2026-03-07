@@ -94,8 +94,17 @@
 | 🎙️ Record   |  [Ask Q&A...] |
 +-----------------------------+
 ```
+
+4.  Case Document Ingestion & Memory 
+    
+    *   The system is not just a call note tool; it is a living case memory platform that continuously updates from calls, notes, and uploaded case documents.
+    *   Worker can upload PDFs and other case documents directly into the client’s case profile.
+    *   System runs AI document ingestion to extract objective facts, agencies, and deadlines.
+    *   AI decides whether to create a new case note or update an existing case note context.
+    *   Original files are kept accessible via a centralized Case Documents area.
+    *   Ensures that Q&A, summaries, and risk analysis use both interaction history and official records.
             
-4.  AI‑assisted note creation (per client)
+5.  AI‑assisted note creation (per client)
     
     *   In‑person visit flow:
         
