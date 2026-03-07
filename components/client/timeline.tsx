@@ -202,16 +202,25 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     );
   }
 
+  // Backboard returns UTC timestamps that may lack a 'Z' suffix.
+  // Ensure they're parsed as UTC so toLocale* methods convert to local time correctly.
+  const parseUTC = (ts: string): Date => {
+    // If the string already has timezone info (Z, +, or -offset), parse as-is
+    if (/Z|[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts);
+    // Otherwise append Z to force UTC interpretation
+    return new Date(ts + "Z");
+  };
+
   const formatDate = (ts: string | null) => {
-    if (!ts) return "—";
-    const d = new Date(ts);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    if (!ts) return "\u2014";
+    const d = parseUTC(ts);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
   const formatTime = (ts: string | null) => {
     if (!ts) return "";
-    const d = new Date(ts);
-    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const d = parseUTC(ts);
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   };
 
   // ── Expanded: full-width card takeover ────────────────────────────────────
