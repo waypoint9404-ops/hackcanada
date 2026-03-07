@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Client {
   id: string;
@@ -27,7 +27,12 @@ export default function TestIntegrationsPage() {
     { label: "Backboard Connection", status: "idle", data: null },
     { label: "Ingest Pipeline", status: "idle", data: null },
     { label: "Q&A (RAG)", status: "idle", data: null },
+    { label: "ElevenLabs TTS", status: "idle", data: null },
+    { label: "Full Recap Pipeline", status: "idle", data: null },
   ]);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recapAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Fetch clients from Supabase on mount
   useEffect(() => {
@@ -128,6 +133,87 @@ export default function TestIntegrationsPage() {
       });
     } catch (err) {
       updateResult(2, { status: "error", data: { error: String(err) } });
+    }
+  }
+
+  // ─── Test 4: ElevenLabs TTS ───────────────────────────────────────────
+
+  async function testElevenLabs() {
+    updateResult(3, { status: "loading", data: null });
+    try {
+      const res = await fetch("/api/elevenlabs/test");
+      const data = await res.json();
+
+      // If we got audio, create a playable URL
+      if (data.success && data.audioBase64) {
+        const audioBytes = Uint8Array.from(atob(data.audioBase64), (c) =>
+          c.charCodeAt(0)
+        );
+        const blob = new Blob([audioBytes], { type: "audio/mpeg" });
+        const url = URL.createObjectURL(blob);
+        if (audioRef.current) {
+          audioRef.current.src = url;
+        }
+      }
+
+      updateResult(3, {
+        status: data.success ? "success" : "error",
+        data: data.success
+          ? {
+              success: true,
+              audioSizeBytes: data.audioSizeBytes,
+              testText: data.testText,
+              note: data.audioBase64
+                ? "Audio generated — use player below"
+                : undefined,
+            }
+          : data,
+      });
+    } catch (err) {
+      updateResult(3, { status: "error", data: { error: String(err) } });
+    }
+  }
+
+  // ─── Test 5: Full Recap Pipeline ──────────────────────────────────────
+
+  async function testRecap() {
+    if (!selectedClient) return;
+    updateResult(4, { status: "loading", data: null });
+    try {
+      const res = await fetch("/api/recap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: selectedClient.id }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        updateResult(4, { status: "error", data: errData });
+        return;
+      }
+
+      // Response is audio/mpeg
+      const recapText = decodeURIComponent(
+        res.headers.get("X-Recap-Text") ?? ""
+      );
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (recapAudioRef.current) {
+        recapAudioRef.current.src = url;
+      }
+
+      updateResult(4, {
+        status: "success",
+        data: {
+          success: true,
+          client: selectedClient.name,
+          audioSizeBytes: blob.size,
+          recapText: recapText || "[see X-Recap-Text header]",
+          note: "Use player below to listen",
+        },
+      });
+    } catch (err) {
+      updateResult(4, { status: "error", data: { error: String(err) } });
     }
   }
 
@@ -287,16 +373,29 @@ export default function TestIntegrationsPage() {
 
               <button
                 onClick={
-                  i === 0 ? testBackboard : i === 1 ? testIngest : testQnA
+                  i === 0
+                    ? testBackboard
+                    : i === 1
+                    ? testIngest
+                    : i === 2
+                    ? testQnA
+                    : i === 3
+                    ? testElevenLabs
+                    : testRecap
                 }
-                disabled={result.status === "loading" || (i > 0 && !selectedClient)}
+                disabled={
+                  result.status === "loading" ||
+                  (i > 0 && i !== 3 && !selectedClient)
+                }
                 style={{
                   background:
-                    result.status === "loading" || (i > 0 && !selectedClient)
+                    result.status === "loading" ||
+                    (i > 0 && i !== 3 && !selectedClient)
                       ? "#27272a"
                       : "#fafafa",
                   color:
-                    result.status === "loading" || (i > 0 && !selectedClient)
+                    result.status === "loading" ||
+                    (i > 0 && i !== 3 && !selectedClient)
                       ? "#71717a"
                       : "#0a0a0a",
                   border: "none",
@@ -305,21 +404,43 @@ export default function TestIntegrationsPage() {
                   fontSize: "0.8125rem",
                   fontWeight: 500,
                   cursor:
-                    result.status === "loading" || (i > 0 && !selectedClient)
+                    result.status === "loading" ||
+                    (i > 0 && i !== 3 && !selectedClient)
                       ? "not-allowed"
                       : "pointer",
                   transition: "opacity 0.15s",
                   marginBottom: result.data ? "0.75rem" : 0,
                 }}
               >
-                {i === 0
-                  ? "Test Backboard Connection"
-                  : i === 1
-                  ? "Test Ingest Pipeline"
-                  : "Test Q&A"}
+                {[
+                  "Test Backboard Connection",
+                  "Test Ingest Pipeline",
+                  "Test Q&A",
+                  "Test ElevenLabs TTS",
+                  "Test Full Recap",
+                ][i]}
               </button>
 
-              {result.data && (
+              {i === 3 && result.status === "success" && (
+                <div style={{ marginTop: "0.5rem" }}>
+                  <audio
+                    ref={audioRef}
+                    controls
+                    style={{ width: "100%", height: "36px" }}
+                  />
+                </div>
+              )}
+              {i === 4 && result.status === "success" && (
+                <div style={{ marginTop: "0.5rem" }}>
+                  <audio
+                    ref={recapAudioRef}
+                    controls
+                    style={{ width: "100%", height: "36px" }}
+                  />
+                </div>
+              )}
+
+              {result.data != null && (
                 <pre
                   style={{
                     background: "#0a0a0a",
@@ -353,7 +474,7 @@ export default function TestIntegrationsPage() {
             fontFamily: "var(--font-geist-mono), monospace",
           }}
         >
-          <p>Test 1 (Backboard) works standalone. Tests 2 & 3 need Supabase clients.</p>
+          <p>Tests 1 & 4 work standalone. Tests 2, 3, & 5 need Supabase clients + Backboard threads.</p>
         </footer>
       </div>
     </div>

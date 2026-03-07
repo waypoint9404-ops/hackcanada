@@ -5,9 +5,7 @@
  * https://github.com/Backboard-io/backboard_io_cookbook/blob/main/recipes/ts_client.ts
  *
  * All Backboard calls go through this file — never expose the API key to the client.
- *
- * Key difference from the previous version: we now pass `llm_provider` and `model_name`
- * on every message to ensure Gemini is used instead of the default GPT-4o.
+ 
  */
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -28,13 +26,13 @@ export interface ModelConfig {
  *  Backboard routes via OpenRouter, so model names use the `org/model` format. */
 export const GEMINI_FLASH_CONFIG: ModelConfig = {
   llmProvider: process.env.BACKBOARD_LLM_PROVIDER ?? "openrouter",
-  modelName: process.env.BACKBOARD_MODEL_NAME ?? "google/gemini-2.5-flash",
+  modelName: process.env.BACKBOARD_MODEL_NAME ?? "google/gemini-3-flash-preview",
 };
 
 /** Gemini Pro — deeper reasoning. Use for risk-aware overviews and recap scripts. */
 export const GEMINI_PRO_CONFIG: ModelConfig = {
   llmProvider: "openrouter",
-  modelName: "google/gemini-2.5-pro-preview",
+  modelName: "google/gemini-3.1-pro-preview",
 };
 
 // ─── Env Helpers ─────────────────────────────────────────────────────────────
