@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Markdown } from "@/components/ui/markdown";
 
@@ -21,6 +21,44 @@ export function Timeline({ clientId }: TimelineProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const startEditing = (event: TimelineEvent) => {
+    setEditingId(event.id);
+    setEditContent(event.content);
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditContent("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent, messageId: editingId }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      // Update the local event content
+      setEvents((prev) =>
+        prev.map((e) => (e.id === editingId ? { ...e, content: editContent } : e))
+      );
+      setEditingId(null);
+      setEditContent("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -117,23 +155,68 @@ export function Timeline({ clientId }: TimelineProps) {
                     event.role === "user" ? "Raw Input" : "AI Note"
                   )}
                 </span>
-                <span className="meta-mono">{formattedDate}</span>
+                <div className="flex items-center gap-2">
+                  {editingId !== event.id && (
+                    <button
+                      onClick={() => startEditing(event)}
+                      className="text-text-tertiary hover:text-text-primary transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                      title="Edit note"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                  )}
+                  <span className="meta-mono">{formattedDate}</span>
+                </div>
               </div>
               
-              <div className={`text-[13px] sm:text-sm text-text-secondary leading-relaxed break-words ${isLong && !isExpanded ? "max-h-[120px] overflow-hidden relative" : ""}`}>
-                <Markdown content={cleanContent} />
-                {isLong && !isExpanded && (
-                  <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-bg-base to-transparent group-hover:from-bg-elevated" />
-                )}
-              </div>
+              {editingId === event.id ? (
+                <div className="flex flex-col gap-2 mt-1">
+                  <textarea
+                    ref={textareaRef}
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    rows={6}
+                    disabled={saving}
+                    className="w-full bg-bg-base border border-border-subtle rounded-sm p-2.5 text-[13px] sm:text-sm leading-relaxed text-text-primary focus:outline-none focus:border-border-strong focus:ring-1 focus:ring-border-strong resize-none"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={cancelEditing}
+                      disabled={saving}
+                      className="px-2.5 py-1 text-[11px] font-medium text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={saveEdit}
+                      disabled={saving}
+                      className="px-2.5 py-1 text-[11px] font-medium bg-text-primary text-bg-surface rounded-sm hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+                    >
+                      {saving ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className={`text-[13px] sm:text-sm text-text-secondary leading-relaxed break-words ${isLong && !isExpanded ? "max-h-[120px] overflow-hidden relative" : ""}`}>
+                    <Markdown content={cleanContent} />
+                    {isLong && !isExpanded && (
+                      <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-bg-base to-transparent group-hover:from-bg-elevated" />
+                    )}
+                  </div>
 
-              {isLong && (
-                <button
-                  onClick={() => toggleExpand(event.id)}
-                  className="text-[11px] font-mono text-accent hover:underline self-start mt-1 cursor-pointer"
-                >
-                  {isExpanded ? "Show less" : "Show more"}
-                </button>
+                  {isLong && (
+                    <button
+                      onClick={() => toggleExpand(event.id)}
+                      className="text-[11px] font-mono text-accent hover:underline self-start mt-1 cursor-pointer"
+                    >
+                      {isExpanded ? "Show less" : "Show more"}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

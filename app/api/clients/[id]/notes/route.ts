@@ -11,10 +11,11 @@ const limiter = rateLimit({ interval: 60_000, limit: 15 });
 /**
  * POST /api/clients/[id]/notes
  *
- * Save an edited note back to the Backboard thread.
- * This keeps Backboard's memory aligned with any worker edits.
+ * Save an edited note back to the Backboard thread and persist the edit in Supabase.
+ * This keeps Backboard's memory aligned with any worker edits, and ensures
+ * the edit survives page refreshes by storing it in the note_edits table.
  *
- * Body: { content: string, tags?: string[], risk_level?: string }
+ * Body: { content: string, messageId?: string, tags?: string[], risk_level?: string }
  */
 export async function POST(
   request: NextRequest,
@@ -31,7 +32,7 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { content, tags, risk_level } = body;
+    const { content, messageId, tags, risk_level } = body;
 
     if (!content || typeof content !== "string") {
       return NextResponse.json(
@@ -71,6 +72,25 @@ export async function POST(
       GEMINI_FLASH_CONFIG,
       { memory: "Auto" }
     );
+
+    // Persist the edit in Supabase so it survives page refresh
+    if (messageId && typeof messageId === "string") {
+      try {
+        await supabase
+          .from("note_edits")
+          .upsert(
+            {
+              client_id: id,
+              message_id: messageId,
+              edited_content: content,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "client_id,message_id" }
+          );
+      } catch {
+        // note_edits table may not exist yet — edit is still saved to Backboard
+      }
+    }
 
     // Update tags and risk_level in Supabase if provided
     const updates: Record<string, unknown> = {
