@@ -66,23 +66,19 @@ export async function GET(
         const nextMsg = i + 1 < filtered.length ? filtered[i + 1] : null;
 
         if (isWorkerEdit) {
-          // Worker edit — the user message IS the edit, AI response is acknowledgment
-          // Extract the actual edited content from the worker edit message
+          // Worker edit — apply this edit to the PREVIOUS assistant note
           const editContent = content
             .replace(/\[WORKER EDIT[^\]]*\]\n*/i, "")
             .replace(/^The social worker has reviewed and edited the following case note for [^:]*:\n*/i, "")
             .replace(/\n*Please acknowledge this edit and update your understanding of this client accordingly\.?\s*$/i, "")
             .trim();
+          
+          // Find the most recently added entry and overwrite its content
+          if (entries.length > 0) {
+            entries[entries.length - 1].ai_note = editContent;
+            entries[entries.length - 1].is_worker_edit = true;
+          }
 
-          entries.push({
-            id: msg.run_id ?? `entry-${i}`,
-            ai_note: editContent,
-            raw_transcript: null,
-            timestamp: timestamp ?? null,
-            is_worker_edit: true,
-          });
-
-          // Skip the AI acknowledgment
           if (nextMsg && nextMsg.role === "assistant") {
             i += 2;
           } else {
@@ -146,24 +142,8 @@ export async function GET(
     }
 
     // Merge any worker edits from Supabase over the original Backboard messages
-    try {
-      const { data: edits } = await supabase
-        .from("note_edits")
-        .select("message_id, edited_content")
-        .eq("client_id", id);
-
-      if (edits && edits.length > 0) {
-        const editMap = new Map(edits.map((e) => [e.message_id, e.edited_content]));
-        for (const entry of entries) {
-          const override = editMap.get(entry.id);
-          if (override !== undefined) {
-            entry.ai_note = override;
-          }
-        }
-      }
-    } catch {
-      // note_edits table may not exist yet — serve raw Backboard messages
-    }
+    // The note_edits table does not exist in this project.
+    // Instead of overriding notes, we rely purely on the fact that we pushed the edit to backboard!
 
     return NextResponse.json({ entries });
   } catch (err) {

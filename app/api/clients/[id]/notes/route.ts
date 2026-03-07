@@ -100,37 +100,7 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // ── Step 1: Persist the edit in Supabase immediately ──────────────────────
-    if (messageId && typeof messageId === "string") {
-      try {
-        await supabase
-          .from("note_edits")
-          .upsert(
-            {
-              client_id: id,
-              message_id: messageId,
-              edited_content: content,
-              edited_by: worker.id,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "client_id,message_id" }
-          );
-      } catch {
-        // note_edits table may not exist yet — edit is still sent to Backboard
-      }
-    }
-
-    // ── Step 2: Update tags and risk_level in Supabase if provided ────────────
-    const updates: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
-    if (tags && Array.isArray(tags)) updates.tags = tags;
-    if (risk_level && ["LOW", "MED", "HIGH"].includes(risk_level)) {
-      updates.risk_level = risk_level;
-    }
-    await supabase.from("clients").update(updates).eq("id", id);
-
-    // ── Step 3: Fire-and-forget Backboard sync + summary regen ─────────────
+    // ── Step 1: Fire-and-forget Backboard sync + summary regen ─────────────
     // The edit is safely persisted in Supabase; return immediately.
     // Backboard memory sync and summary regen run in a detached promise —
     // avoids the "Response body object should not be disturbed or locked"
