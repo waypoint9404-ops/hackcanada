@@ -215,7 +215,7 @@ export async function getThreadMessages(
   threadId: string
 ): Promise<BackboardMessageResponse[]> {
   const res = await fetchWithTimeout(
-    `${BASE_URL}/threads/${threadId}/messages`,
+    `${BASE_URL}/threads/${threadId}`,
     { method: "GET", headers: authHeaders() }
   );
 
@@ -226,7 +226,8 @@ export async function getThreadMessages(
     );
   }
 
-  return res.json();
+  const data = await res.json();
+  return data.messages || [];
 }
 
 // ─── Messages ────────────────────────────────────────────────────────────────
