@@ -248,6 +248,13 @@ h1, h2, h3 {
   outline-offset: 2px;
 }
 
+/* Remove focus-visible ring from form inputs — they have their own focus styles */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
 /* ─── Bottom Sheet Overlay ───────────────────────────────────────────────── */
 
 .sheet-overlay {
@@ -389,6 +396,7 @@ h1, h2, h3 {
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
   padding: 1rem;
+  cursor: pointer;
   transition: border-color 300ms var(--ease-out-expo),
               box-shadow 300ms var(--ease-out-expo),
               min-width 300ms var(--ease-out-expo);
@@ -397,11 +405,6 @@ h1, h2, h3 {
 .note-card:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-sm);
-}
-
-.note-card-expanded {
-  border-color: var(--accent-ai);
-  box-shadow: var(--shadow-md);
 }
 
 .note-card-saved {
@@ -430,4 +433,46 @@ h1, h2, h3 {
   height: 40px;
   background: linear-gradient(to top, var(--bg-surface), transparent);
   pointer-events: none;
+}
+
+/* ─── Expanded Note View (Full-width editable) ──────────────────────────── */
+
+.note-card-expanded-full {
+  width: 100%;
+  border-color: var(--accent-ai);
+  box-shadow: var(--shadow-md);
+  cursor: default;
+}
+
+/* Seamless edit textarea — matches the rendered markdown style exactly */
+.note-edit-textarea {
+  width: 100%;
+  min-height: 200px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem; /* 13px, matches text-[13px] */
+  line-height: 1.625; /* matches leading-relaxed */
+  color: var(--text-secondary);
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (min-width: 640px) {
+  .note-edit-textarea {
+    font-size: 0.875rem; /* 14px, matches sm:text-sm */
+  }
+}
+
+.note-edit-textarea:focus {
+  outline: none;
+}
+
+.note-edit-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

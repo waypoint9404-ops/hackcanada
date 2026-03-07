@@ -22,25 +22,33 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
   const [entries, setEntries] = useState<CaseNoteEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Expand/collapse state
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  // Editing state
-  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Expansion: only one card expanded at a time (full-width takeover)
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Editing mode within the expanded card
+  const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   // Raw transcript visibility
-  const [transcriptVisible, setTranscriptVisible] = useState<Set<string>>(new Set());
+  const [transcriptVisible, setTranscriptVisible] = useState(false);
 
   const fetchTimeline = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/clients/${clientId}/timeline`);
-      const data = await res.json();
-
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Invalid server response");
+      }
       if (!res.ok) throw new Error(data.error || "Failed to fetch timeline");
-
       setEntries(data.entries || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error loading timeline");
@@ -53,83 +61,95 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     fetchTimeline();
   }, [fetchTimeline, refreshKey]);
 
-  const toggleExpand = (id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-        // Also close transcript and cancel edit when collapsing
-        setTranscriptVisible((tv) => {
-          const n = new Set(tv);
-          n.delete(id);
-          return n;
-        });
-        if (editingId === id) {
-          setEditingId(null);
-          setEditContent("");
-        }
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const handleExpand = (id: string) => {
+    if (expandedId === id) {
+      // Collapse
+      setExpandedId(null);
+      setIsEditing(false);
+      setEditContent("");
+      setTranscriptVisible(false);
+      setSaveError(null);
+    } else {
+      setExpandedId(id);
+      setIsEditing(false);
+      setEditContent("");
+      setTranscriptVisible(false);
+      setSaveError(null);
+    }
   };
 
-  const toggleTranscript = (id: string) => {
-    setTranscriptVisible((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const startEdit = (entry: CaseNoteEntry) => {
-    setEditingId(entry.id);
+  const startEditing = (entry: CaseNoteEntry) => {
+    setIsEditing(true);
     setEditContent(entry.ai_note);
-    // Make sure it's expanded
-    setExpandedIds((prev) => new Set(prev).add(entry.id));
-    setTimeout(() => textareaRef.current?.focus(), 50);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        // Auto-resize to content
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+      }
+    }, 30);
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
+  const cancelEditing = (entry: CaseNoteEntry) => {
+    setIsEditing(false);
     setEditContent("");
+    setSaveError(null);
   };
 
-  const handleSave = async () => {
-    if (!editingId || !editContent.trim()) return;
+  const isDirty = (entry: CaseNoteEntry) => {
+    return isEditing && editContent !== entry.ai_note;
+  };
+
+  const handleSave = async (id: string) => {
+    if (!editContent.trim()) return;
 
     setSaving(true);
+    setSaveError(null);
     setSaveSuccess(null);
+
     try {
       const res = await fetch(`/api/clients/${clientId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editContent, messageId: editingId }),
+        body: JSON.stringify({ content: editContent, messageId: id }),
       });
 
-      const data = await res.json();
+      const raw = await res.text();
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new Error("Invalid response from server");
+      }
+
       if (!res.ok) throw new Error(data.error || "Failed to save");
 
-      setSaveSuccess(editingId);
-      setEditingId(null);
+      setSaveSuccess(id);
+      setIsEditing(false);
       setEditContent("");
+      setTimeout(() => setSaveSuccess(null), 2500);
 
-      // Clear success animation after a moment
-      setTimeout(() => setSaveSuccess(null), 2000);
+      // Update the local entry optimistically
+      setEntries((prev) =>
+        prev.map((e) => (e.id === id ? { ...e, ai_note: editContent, is_worker_edit: true } : e))
+      );
 
-      // Refresh timeline to show the edit
-      await fetchTimeline();
-
-      // Notify parent to refresh summary
+      fetchTimeline();
       onNoteEdited?.();
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : "Error saving note");
+      console.error("[Timeline] Save failed:", err);
+      setSaveError(err instanceof Error ? err.message : "Error saving note");
     } finally {
       setSaving(false);
     }
+  };
+
+  // Auto-resize textarea on content change
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditContent(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = e.target.scrollHeight + "px";
   };
 
   if (loading) {
@@ -168,20 +188,147 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
     return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   };
 
+  // ── Expanded: full-width card takeover ────────────────────────────────────
+  if (expandedId) {
+    const entry = entries.find((e) => e.id === expandedId);
+    if (!entry) {
+      setExpandedId(null);
+      return null;
+    }
+
+    const dirty = isDirty(entry);
+    const justSaved = saveSuccess === entry.id;
+
+    return (
+      <div className="note-card note-card-expanded-full">
+        {/* Card header — same as compact cards */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-mono uppercase tracking-wider">
+              {entry.is_worker_edit ? (
+                <span className="text-accent font-semibold flex items-center gap-1">
+                  <span>✏️</span> Edited Note
+                </span>
+              ) : (
+                <span className="text-accent-ai font-semibold">AI Note</span>
+              )}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Close button */}
+            <button
+              onClick={() => handleExpand(entry.id)}
+              className="w-6 h-6 flex items-center justify-center text-text-tertiary hover:text-text-primary rounded-sm hover:bg-bg-elevated transition-colors cursor-pointer"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+            {justSaved && (
+              <span className="text-[11px] font-mono text-status-low-text flex items-center gap-1">
+                <span>✓</span> Saved
+              </span>
+            )}
+            {dirty && !saving && (
+              <button
+                onClick={() => cancelEditing(entry)}
+                className="text-[11px] font-mono text-text-tertiary hover:text-text-primary cursor-pointer transition-colors"
+              >
+                Discard
+              </button>
+            )}
+            {dirty && (
+              <button
+                onClick={() => handleSave(entry.id)}
+                disabled={saving}
+                className="px-3 py-1.5 text-[11px] font-mono uppercase tracking-wide bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Save Changes"}
+              </button>
+            )}
+            <span className="meta-mono text-[10px]">
+              {formatDate(entry.timestamp)}
+              {formatTime(entry.timestamp) && (
+                <span className="ml-1 opacity-60">{formatTime(entry.timestamp)}</span>
+              )}
+            </span>
+          </div>
+        </div>
+
+        {/* Save error */}
+        {saveError && (
+          <div className="mb-3 p-2 bg-status-high-bg border border-status-high-text/20 rounded-sm">
+            <p className="text-xs text-status-high-text">{saveError}</p>
+          </div>
+        )}
+
+        {/* Note content — rendered markdown OR seamless edit textarea */}
+        {isEditing ? (
+          <textarea
+            ref={textareaRef}
+            value={editContent}
+            onChange={handleTextareaChange}
+            disabled={saving}
+            className="note-edit-textarea"
+          />
+        ) : (
+          <div
+            className="text-[13px] sm:text-sm text-text-secondary leading-relaxed break-words cursor-text"
+            onClick={() => startEditing(entry)}
+          >
+            <Markdown content={entry.ai_note} />
+          </div>
+        )}
+
+        {/* Action bar */}
+        <div className="flex items-center gap-3 mt-4 pt-3 border-t border-border-subtle">
+          {!isEditing && (
+            <button
+              onClick={() => startEditing(entry)}
+              className="text-[11px] font-mono text-accent-ai hover:underline cursor-pointer transition-colors"
+            >
+              ✏️ Edit
+            </button>
+          )}
+
+          {entry.raw_transcript && (
+            <button
+              onClick={() => setTranscriptVisible((v) => !v)}
+              className="text-[11px] font-mono text-text-tertiary hover:text-text-secondary hover:underline cursor-pointer transition-colors"
+            >
+              {transcriptVisible ? "Hide Transcript" : "View Raw Transcript"}
+            </button>
+          )}
+        </div>
+
+        {/* Raw Transcript */}
+        {transcriptVisible && entry.raw_transcript && (
+          <div className="mt-3 p-3 bg-bg-elevated rounded-sm border border-border-subtle">
+            <span className="text-[9px] font-mono uppercase tracking-widest text-text-tertiary block mb-2">
+              Raw Transcript
+            </span>
+            <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">
+              {entry.raw_transcript}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Compact card scroll view ──────────────────────────────────────────────
   return (
     <div className="case-history-container">
       <div className="case-history-scroll">
         {entries.map((entry) => {
-          const isExpanded = expandedIds.has(entry.id);
-          const isEditing = editingId === entry.id;
-          const showTranscript = transcriptVisible.has(entry.id);
           const justSaved = saveSuccess === entry.id;
           const isLong = entry.ai_note.length > 200;
 
           return (
             <div
               key={entry.id}
-              className={`note-card ${isExpanded ? "note-card-expanded" : ""} ${justSaved ? "note-card-saved" : ""}`}
+              className={`note-card ${justSaved ? "note-card-saved" : ""}`}
+              onClick={() => handleExpand(entry.id)}
+              style={{ cursor: "pointer" }}
             >
               {/* Card header */}
               <div className="flex items-center justify-between mb-2">
@@ -202,97 +349,23 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
                 </span>
               </div>
 
-              {/* Note content */}
-              {isEditing ? (
-                <div className="flex flex-col gap-3">
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    rows={8}
-                    disabled={saving}
-                    className="w-full bg-bg-base border border-border-subtle rounded-sm p-3 text-sm leading-relaxed text-text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-none whitespace-pre-wrap transition-colors"
-                    autoFocus
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={cancelEdit}
-                      disabled={saving}
-                      className="flex-1 py-2 text-xs font-mono uppercase tracking-wide border border-border-subtle rounded-sm text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      disabled={saving || !editContent.trim()}
-                      className="flex-[2] py-2 text-xs font-mono uppercase tracking-wide bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      {saving ? "Saving..." : "Save Changes"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  className={`text-[13px] sm:text-sm text-text-secondary leading-relaxed break-words ${
-                    isLong && !isExpanded ? "note-content-collapsed" : ""
-                  }`}
-                >
-                  <Markdown content={entry.ai_note} />
-                  {isLong && !isExpanded && (
-                    <div className="note-fade-overlay" />
-                  )}
-                </div>
-              )}
+              {/* Note content — rendered markdown, truncated */}
+              <div
+                className={`text-[13px] sm:text-sm text-text-secondary leading-relaxed break-words ${
+                  isLong ? "note-content-collapsed" : ""
+                }`}
+              >
+                <Markdown content={entry.ai_note} />
+                {isLong && <div className="note-fade-overlay" />}
+              </div>
 
-              {/* Action bar */}
-              {!isEditing && (
-                <div className="flex items-center gap-3 mt-3 pt-2 border-t border-border-subtle">
-                  <button
-                    onClick={() => toggleExpand(entry.id)}
-                    className="text-[11px] font-mono text-accent hover:underline cursor-pointer transition-colors"
-                  >
-                    {isExpanded ? "Collapse" : "Expand"}
-                  </button>
 
-                  {isExpanded && (
-                    <>
-                      <button
-                        onClick={() => startEdit(entry)}
-                        className="text-[11px] font-mono text-accent-ai hover:underline cursor-pointer transition-colors"
-                      >
-                        ✏️ Edit
-                      </button>
-
-                      {entry.raw_transcript && (
-                        <button
-                          onClick={() => toggleTranscript(entry.id)}
-                          className="text-[11px] font-mono text-text-tertiary hover:text-text-secondary hover:underline cursor-pointer transition-colors"
-                        >
-                          {showTranscript ? "Hide Transcript" : "View Raw Transcript"}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Raw Transcript (nested, toggled) */}
-              {isExpanded && showTranscript && entry.raw_transcript && (
-                <div className="mt-3 p-3 bg-bg-elevated rounded-sm border border-border-subtle">
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-text-tertiary block mb-2">
-                    Raw Transcript
-                  </span>
-                  <p className="text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">
-                    {entry.raw_transcript}
-                  </p>
-                </div>
-              )}
 
               {/* Save success indicator */}
               {justSaved && (
                 <div className="mt-2 text-[11px] font-mono text-status-low-text flex items-center gap-1">
                   <span>✓</span> Saved — summary updating
                 </div>
-
               )}
             </div>
           );

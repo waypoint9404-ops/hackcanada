@@ -1,8 +1,6 @@
 import { auth0 } from "@/lib/auth0";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import Image from "next/image";
 
 export default async function LoginPage() {
   const session = await auth0.getSession();
@@ -40,11 +38,13 @@ export default async function LoginPage() {
         </p>
 
         <div className="w-full flex flex-col gap-3">
-          <Link href="/auth/login" className="w-full" prefetch={false}>
-            <Button variant="primary" size="lg" className="w-full text-base">
-              Sign In
-            </Button>
-          </Link>
+          <a
+            href="/auth/login"
+            className="w-full inline-flex items-center justify-center font-medium text-base min-h-[48px] rounded-sm px-6 py-3 transition-expo transition-colors select-none cursor-pointer"
+            style={{ backgroundColor: 'var(--accent-primary)', color: '#FFFFFF' }}
+          >
+            Sign In
+          </a>
           <div className="text-center mt-6">
             <p className="text-xs text-text-tertiary" style={{ fontFamily: "var(--font-mono)" }}>
               SECURE WORKER ACCESS ONLY

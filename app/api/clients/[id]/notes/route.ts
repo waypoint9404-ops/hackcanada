@@ -12,10 +12,9 @@ const limiter = rateLimit({ interval: 60_000, limit: 15 });
 
 /**
  * POST /api/clients/[id]/notes
- * Save an edited note back to the Backboard thread and persist the edit in Supabase.
- * This keeps Backboard's memory aligned with any worker edits, and ensures
- * the edit survives page refreshes by storing it in the note_edits table.
- * After saving, triggers summary regeneration.
+ * Save an edited note to Supabase immediately, then sync to Backboard and
+ * regenerate the summary asynchronously via `after()` so the client gets a
+ * fast response. The edit is persisted in note_edits first (never lost).
  *
  * Body: { content: string, messageId?: string, tags?: string[], risk_level?: string }
  */
@@ -33,8 +32,24 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const body = await request.json();
-    const { content, messageId, tags, risk_level } = body;
+
+    // Read body once defensively
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+
+    const { content, messageId, tags, risk_level } = body as {
+      content?: string;
+      messageId?: string;
+      tags?: string[];
+      risk_level?: string;
+    };
 
     const session = await auth0.getSession(request);
     if (!session) {
@@ -85,7 +100,6 @@ export async function POST(
     }
 
     // ── Step 1: Persist the edit in Supabase immediately ──────────────────────
-    // This happens first so the edit is never lost even if Backboard is slow/down.
     if (messageId && typeof messageId === "string") {
       try {
         await supabase
@@ -115,54 +129,40 @@ export async function POST(
     }
     await supabase.from("clients").update(updates).eq("id", id);
 
-    // ── Step 3: Send to Backboard so AI memory reflects the correction ────────
-    // This is required for correctness. Retry once for transient network errors.
-    const editMessage = `[WORKER EDIT — ${new Date().toISOString()}]\nThe social worker has reviewed and edited the following case note for ${client.name}:\n\n${content}\n\nPlease acknowledge this edit and update your understanding of this client accordingly.`;
+    // ── Step 3: Fire-and-forget Backboard sync + summary regen ─────────────
+    // The edit is safely persisted in Supabase; return immediately.
+    // Backboard memory sync and summary regen run in a detached promise —
+    // avoids the "Response body object should not be disturbed or locked"
+    // error caused by after() interfering with the response lifecycle.
+    const threadId = client.backboard_thread_id!;
+    const clientName = client.name;
+    const clientId = id;
+    const editedContent = content;
 
-    let response;
-    try {
-      response = await sendMessageWithModel(
-        client.backboard_thread_id,
-        editMessage,
-        GEMINI_FLASH_CONFIG,
-        { memory: "Auto" }
-      );
-    } catch {
+    void (async () => {
+      const editMessage = `[WORKER EDIT — ${new Date().toISOString()}]\nThe social worker has reviewed and edited the following case note for ${clientName}:\n\n${editedContent}\n\nPlease acknowledge this edit and update your understanding of this client accordingly.`;
+
       try {
-        response = await sendMessageWithModel(
-          client.backboard_thread_id,
+        await sendMessageWithModel(
+          threadId,
           editMessage,
           GEMINI_FLASH_CONFIG,
           { memory: "Auto" }
         );
-      } catch (retryErr) {
-        const reason = retryErr instanceof Error ? retryErr.message : String(retryErr);
-        console.error("[notes] Backboard sync failed after retry:", reason);
-        return NextResponse.json(
-          {
-            error:
-              "Note edit was saved locally but failed to sync to Backboard. Please retry.",
-            backboard_thread_id: client.backboard_thread_id,
-            details: reason,
-          },
-          { status: 502 }
-        );
+      } catch (err) {
+        console.error("[notes/bg] Backboard sync failed:", err instanceof Error ? err.message : err);
       }
-    }
 
-    // Trigger summary regeneration after the edit
-    let newSummary: string | null = null;
-    try {
-      newSummary = await regenerateSummary(id, client.backboard_thread_id);
-    } catch (summaryErr) {
-      console.error("[notes] Summary regeneration failed (non-fatal):", summaryErr);
-    }
+      try {
+        await regenerateSummary(clientId, threadId);
+      } catch (err) {
+        console.error("[notes/bg] Summary regeneration failed:", err instanceof Error ? err.message : err);
+      }
+    })();
+
     return NextResponse.json({
       success: true,
-      acknowledgment: response?.content,
-      summary: newSummary,
       backboard_thread_id: client.backboard_thread_id,
-      run_id: response?.run_id,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
