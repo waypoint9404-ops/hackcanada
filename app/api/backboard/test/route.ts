@@ -20,11 +20,11 @@ import {
  */
 export async function GET() {
   try {
-    // Step 1: Verify assistant
-    const assistant = await getAssistant();
-
-    // Step 2: Create thread
-    const thread = await createThread();
+    // Step 1: Verify assistant & Create thread (Classic parallelization)
+    const [assistant, thread] = await Promise.all([
+      getAssistant(),
+      createThread(),
+    ]);
 
     // Step 3: Send a mock case note — explicitly routed to Gemini
     const ingestResponse = await sendMessageWithModel(
