@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { StatusBadge, TagBadge } from "@/components/ui/badge";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { AddClientButton } from "@/components/client/add-client-button";
 
 export default async function DashboardPage() {
   const session = await auth0.getSession();
@@ -57,7 +58,9 @@ export default async function DashboardPage() {
         {clients.length === 0 ? (
           <div className="text-center py-12 px-6 border border-dashed border-border-strong rounded-lg">
             <p className="text-text-secondary text-sm mb-4">You have no active cases assigned.</p>
-            {/* MVP manual add block if needed */}
+            <div className="max-w-xs mx-auto">
+              <AddClientButton />
+            </div>
           </div>
         ) : (
           clients.map((client) => (
@@ -93,11 +96,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="mt-8">
-        <Link href="#auto-detect-only">
-          <Button variant="secondary" className="w-full">
-            <span>+</span> <span className="ml-2">Add New Client</span>
-          </Button>
-        </Link>
+        <AddClientButton />
         <p className="text-center text-xs text-text-tertiary mt-3">
           New clients are auto-provisioned seamlessly via voice ingestion.
         </p>

@@ -5,7 +5,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
 interface VoiceRecorderProps {
-  clientId: string;
+  clientId?: string;
   open: boolean;
   onClose: () => void;
   onIngestSuccess: (data: any) => void;
@@ -70,7 +70,7 @@ export function VoiceRecorder({ clientId, open, onClose, onIngestSuccess }: Voic
     try {
       const formData = new FormData();
       formData.append("audio", blob, "recording.webm");
-      formData.append("clientId", clientId);
+      if (clientId) formData.append("clientId", clientId);
 
       const res = await fetch("/api/ingest", {
         method: "POST",
@@ -98,7 +98,7 @@ export function VoiceRecorder({ clientId, open, onClose, onIngestSuccess }: Voic
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          clientId, 
+          ...(clientId ? { clientId } : {}), 
           transcript: transcriptText 
         }),
       });
@@ -131,7 +131,7 @@ export function VoiceRecorder({ clientId, open, onClose, onIngestSuccess }: Voic
   };
 
   return (
-    <Sheet open={open} onClose={softClose} title={mode === "audio" ? "Record Case Note" : "Upload Transcript"}>
+    <Sheet open={open} onClose={softClose} title={mode === "audio" ? (clientId ? "Record Case Note" : "Record New Client/Visit") : "Upload Transcript"}>
       <div className="flex flex-col gap-6">
         
         {/* Input Mode Toggle */}
