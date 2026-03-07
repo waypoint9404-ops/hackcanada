@@ -34,6 +34,9 @@ export default function TestIntegrationsPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recapAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Synchronous request locks to prevent duplicate API calls from rapid clicks
+  const runningRef = useRef<Record<number, boolean>>({});
+
   // Fetch clients from Supabase on mount
   useEffect(() => {
     async function fetchClients() {
@@ -64,6 +67,8 @@ export default function TestIntegrationsPage() {
   // ─── Test 1: Backboard Connection ─────────────────────────────────────
 
   async function testBackboard() {
+    if (runningRef.current[0]) return;
+    runningRef.current[0] = true;
     updateResult(0, { status: "loading", data: null });
     try {
       const res = await fetch("/api/backboard/test");
@@ -74,13 +79,16 @@ export default function TestIntegrationsPage() {
       });
     } catch (err) {
       updateResult(0, { status: "error", data: { error: String(err) } });
+    } finally {
+      runningRef.current[0] = false;
     }
   }
 
   // ─── Test 2: Ingest Pipeline ──────────────────────────────────────────
 
   async function testIngest() {
-    if (!selectedClient) return;
+    if (!selectedClient || runningRef.current[1]) return;
+    runningRef.current[1] = true;
     updateResult(1, { status: "loading", data: null });
     try {
       const res = await fetch("/api/ingest", {
@@ -109,13 +117,16 @@ export default function TestIntegrationsPage() {
       }
     } catch (err) {
       updateResult(1, { status: "error", data: { error: String(err) } });
+    } finally {
+      runningRef.current[1] = false;
     }
   }
 
   // ─── Test 3: Smart Q&A ────────────────────────────────────────────────
 
   async function testQnA() {
-    if (!selectedClient) return;
+    if (!selectedClient || runningRef.current[2]) return;
+    runningRef.current[2] = true;
     updateResult(2, { status: "loading", data: null });
     try {
       const res = await fetch("/api/qna", {
@@ -133,12 +144,16 @@ export default function TestIntegrationsPage() {
       });
     } catch (err) {
       updateResult(2, { status: "error", data: { error: String(err) } });
+    } finally {
+      runningRef.current[2] = false;
     }
   }
 
   // ─── Test 4: ElevenLabs TTS ───────────────────────────────────────────
 
   async function testElevenLabs() {
+    if (runningRef.current[3]) return;
+    runningRef.current[3] = true;
     updateResult(3, { status: "loading", data: null });
     try {
       const res = await fetch("/api/elevenlabs/test");
@@ -171,13 +186,16 @@ export default function TestIntegrationsPage() {
       });
     } catch (err) {
       updateResult(3, { status: "error", data: { error: String(err) } });
+    } finally {
+      runningRef.current[3] = false;
     }
   }
 
   // ─── Test 5: Full Recap Pipeline ──────────────────────────────────────
 
   async function testRecap() {
-    if (!selectedClient) return;
+    if (!selectedClient || runningRef.current[4]) return;
+    runningRef.current[4] = true;
     updateResult(4, { status: "loading", data: null });
     try {
       const res = await fetch("/api/recap", {
@@ -214,6 +232,8 @@ export default function TestIntegrationsPage() {
       });
     } catch (err) {
       updateResult(4, { status: "error", data: { error: String(err) } });
+    } finally {
+      runningRef.current[4] = false;
     }
   }
 

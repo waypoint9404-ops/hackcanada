@@ -28,7 +28,7 @@ function getClient(): ElevenLabsClient {
   if (!_client) {
     const apiKey = process.env.ELEVENLABS_API_KEY;
     if (!apiKey) throw new Error("Missing ELEVENLABS_API_KEY env var.");
-    _client = new ElevenLabsClient({ apiKey });
+    _client = new ElevenLabsClient({ apiKey, maxRetries: 0 });
   }
   return _client;
 }
