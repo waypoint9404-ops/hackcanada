@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Play, Pause, Square } from "lucide-react";
 
 interface AudioRecapProps {
   clientId: string;
@@ -13,6 +14,7 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
   const [error, setError] = useState<string | null>(null);
   const [fallbackText, setFallbackText] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -46,14 +48,7 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
         const url = URL.createObjectURL(file);
         setAudioUrl(url);
         
-        // Auto-play
-        const audio = new Audio(url);
-        audio.onended = () => setPlaying(false);
-        setPlaying(true);
-        audio.play().catch((err) => {
-          console.error("Auto-play prevented", err);
-          setPlaying(false);
-        });
+        // Let the useEffect hook handle auto-play once the audio element is rendered
       } else {
         throw new Error("No audio data received");
       }
@@ -66,16 +61,22 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
     }
   };
 
-  const handlePlayPause = () => {
-    // In a real implementation we'd keep track of the Audio object
-    // For MVP, if it's already generated we just hit play again on a new instance
-    // Or we show toggle state. Here we'll just simplify to replay.
-    if (audioUrl && !playing) {
-      const audio = new Audio(audioUrl);
-      audio.onended = () => setPlaying(false);
-      setPlaying(true);
-      audio.play();
+  const togglePlayPause = () => {
+    if (!audioRef.current) return;
+    
+    if (playing) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch(err => console.error("Play prevented", err));
     }
+  };
+
+  const stopAudio = () => {
+    if (!audioRef.current) return;
+    
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    setPlaying(false);
   };
 
   return (
@@ -112,15 +113,25 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
               </span>
             </div>
             {audioUrl && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handlePlayPause}
-                disabled={playing}
-                className="text-accent min-h-[32px] px-3"
-              >
-                {playing ? 'Playing...' : 'Play Again'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={togglePlayPause}
+                  className="h-8 w-8 text-accent hover:bg-accent/10"
+                >
+                  {playing ? <Pause size={18} /> : <Play size={18} className="ml-1" />}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={stopAudio}
+                  disabled={!playing && audioRef.current?.currentTime === 0}
+                  className="h-8 w-8 text-status-high-text hover:bg-status-high-bg"
+                >
+                  <Square size={16} fill="currentColor" />
+                </Button>
+              </div>
             )}
           </div>
 
@@ -130,8 +141,24 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
               <p className="text-[10px] text-status-med-text mt-2 font-mono not-italic uppercase tracking-widest">⚠️ Voice generation blocked</p>
             </div>
           ) : (
-            playing && (
-              <div className="flex items-center justify-center h-8 gap-0.5 mt-2 overflow-hidden bg-bg-surface rounded-full w-full max-w-[200px] mx-auto opacity-80 mix-blend-multiply">
+            <>
+              {/* Native audio element handles precise playback timing and events */}
+              {audioUrl && (
+                <audio 
+                  ref={audioRef}
+                  src={audioUrl}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                  onEnded={() => {
+                    setPlaying(false);
+                    if (audioRef.current) audioRef.current.currentTime = 0;
+                  }}
+                  className="hidden"
+                  autoPlay
+                />
+              )}
+              
+              <div className={`flex items-center justify-center h-8 gap-0.5 mt-2 overflow-hidden bg-bg-surface rounded-full w-full max-w-[200px] mx-auto opacity-80 mix-blend-multiply transition-opacity duration-300 ${playing ? 'opacity-100' : 'opacity-40'}`}>
                 {Array.from({ length: 24 }).map((_, i) => (
                   <span 
                     key={i} 
@@ -139,12 +166,13 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
                     style={{ 
                       animationDelay: `${i * 75}ms`,
                       height: `${10 + Math.random() * 15}px`,
-                      width: '4px'
+                      width: '4px',
+                      animationPlayState: playing ? 'running' : 'paused'
                     }} 
                   />
                 ))}
               </div>
-            )
+            </>
           )}
           
           {error && <p className="text-xs text-status-high-text mt-2">{error}</p>}
