@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "@/components/ui/markdown";
 
 interface QAChatProps {
   clientId: string;
@@ -97,7 +98,11 @@ export function QAChat({ clientId }: QAChatProps) {
                   : "bg-bg-elevated text-text-primary self-start rounded-bl-none border border-border-subtle"
               }`}
             >
-              <div className="whitespace-pre-wrap">{msg.content}</div>
+              {msg.role === "assistant" ? (
+                <Markdown content={msg.content} />
+              ) : (
+                <div className="whitespace-pre-wrap">{msg.content}</div>
+              )}
             </div>
           ))
         )}

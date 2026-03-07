@@ -6,6 +6,21 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AddClientButton } from "@/components/client/add-client-button";
 
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s+/g, "")       // headings
+    .replace(/\*\*(.+?)\*\*/g, "$1")  // bold
+    .replace(/\*(.+?)\*/g, "$1")      // italic
+    .replace(/__(.+?)__/g, "$1")      // bold alt
+    .replace(/_(.+?)_/g, "$1")        // italic alt
+    .replace(/`(.+?)`/g, "$1")        // inline code
+    .replace(/^[-*]\s+/gm, "")        // bullet lists
+    .replace(/^\d+\.\s+/gm, "")       // numbered lists
+    .replace(/\n{2,}/g, " ")          // collapse multiple newlines
+    .replace(/\n/g, " ")              // remaining newlines
+    .trim();
+}
+
 export default async function DashboardPage() {
   const session = await auth0.getSession();
   const workerId = session?.user.sub; // Auth0 ID
@@ -74,7 +89,7 @@ export default async function DashboardPage() {
                 </div>
                 
                 <p className="text-sm text-text-secondary line-clamp-2 leading-relaxed">
-                  {client.summary || "No active summary."}
+                  {client.summary ? stripMarkdown(client.summary) : "No active summary."}
                 </p>
 
                 {client.tags && client.tags.length > 0 && (

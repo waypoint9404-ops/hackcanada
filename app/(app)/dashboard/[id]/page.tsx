@@ -2,6 +2,7 @@
 
 import { use, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StatusBadge, TagBadge } from "@/components/ui/badge";
 import { ActionableSummary } from "@/components/client/actionable-summary";
 import { Timeline } from "@/components/client/timeline";
@@ -26,11 +27,14 @@ export default function ClientDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   
   const [client, setClient] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Data passed from Recorder → Review modal
   const [pendingNote, setPendingNote] = useState("");
@@ -70,6 +74,22 @@ export default function ClientDetailPage({
     fetchClientData();
   };
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete");
+      }
+      router.push("/dashboard");
+    } catch (err) {
+      console.error(err);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-6 text-sm text-text-tertiary">Loading client record...</div>;
   }
@@ -88,9 +108,24 @@ export default function ClientDetailPage({
           </Link>
           <StatusBadge level={client.risk_level} />
         </div>
-        <h1 className="heading-display text-4xl text-text-primary leading-none mb-3">
-          {client.name}
-        </h1>
+        <div className="flex items-start justify-between mb-3">
+          <h1 className="heading-display text-4xl text-text-primary leading-none">
+            {client.name}
+          </h1>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="text-text-tertiary hover:text-status-high-text transition-colors p-1.5 -mr-1.5 cursor-pointer"
+            aria-label="Delete client"
+            title="Delete client"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+        </div>
         {client.tags && client.tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {client.tags.map((tag) => (
@@ -99,6 +134,34 @@ export default function ClientDetailPage({
           </div>
         )}
       </header>
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="mx-5 mb-6 p-4 bg-status-high-bg border border-status-high-text/20 rounded-sm">
+          <p className="text-sm text-status-high-text font-medium mb-3">
+            Permanently delete {client.name}?
+          </p>
+          <p className="text-xs text-text-secondary mb-4">
+            This removes the client record from your caseload. The AI conversation thread on Backboard is retained.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleting}
+              className="flex-1 px-3 py-2 text-xs font-medium bg-bg-surface border border-border-subtle rounded-sm hover:bg-bg-elevated transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex-1 px-3 py-2 text-xs font-medium bg-status-high-text text-white rounded-sm hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+            >
+              {deleting ? "Deleting..." : "Delete Client"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="px-5 flex flex-col gap-8 flex-1">
