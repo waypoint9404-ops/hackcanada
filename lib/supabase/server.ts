@@ -1,12 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+/**
+ * Server-side Supabase client using the publishable key + cookie-based sessions.
+ * Use this for operations that should respect RLS policies.
+ * For admin/bypass-RLS operations, use createAdminClient() from ./admin instead.
+ */
 export async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
-    process.env.SUPABASE_PROJECT_URL!,
-    process.env.SUPABASE_PUBLISHABLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
         getAll() {
@@ -20,7 +25,7 @@ export async function createClient() {
           } catch {
             // The `setAll` method is called from a Server Component where
             // cookies cannot be set. This can be safely ignored if you have
-            // middleware refreshing user sessions.
+            // proxy refreshing user sessions.
           }
         },
       },
