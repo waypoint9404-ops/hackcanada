@@ -56,11 +56,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Send the question to Backboard via Gemini Flash
+    // Use "Readonly" memory so Q&A exchanges can read context but
+    // don't persist as new notes in the thread's memory store.
+    // Prefix with [Q&A] so the timeline can filter these out.
     const response = await sendMessageWithModel(
       client.backboard_thread_id,
-      `Question about ${client.name}: ${question}`,
+      `[Q&A] Question about ${client.name}: ${question}`,
       GEMINI_FLASH_CONFIG,
-      { memory: "Auto" }
+      { memory: "Readonly" }
     );
 
     return NextResponse.json({
