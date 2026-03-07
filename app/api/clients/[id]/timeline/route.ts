@@ -94,7 +94,8 @@ export async function GET(
           const isSummaryPrompt = content.includes("Generate an **actionable summary**") ||
             content.includes("actionable summary") ||
             content.includes("Extract the full name") ||
-            content.startsWith("You are Waypoint");
+            content.startsWith("You are Waypoint") ||
+            content.startsWith("[Q&A]");
           
           if (isSummaryPrompt) {
             // Skip both — this is an internal system call, not a case note
