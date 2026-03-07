@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createThread, sendMessage } from "@/lib/backboard";
+import {
+  createThread,
+  sendMessageWithModel,
+  GEMINI_FLASH_CONFIG,
+} from "@/lib/backboard";
 
 /**
  * POST /api/ingest
  *
- * Skeleton voice ingestion pipeline:
+ * Voice ingestion pipeline:
  * 1. Accepts { clientId, transcript }
  * 2. Looks up the client's backboard_thread_id in Supabase
  * 3. If no thread exists, creates one and writes it back to Supabase
- * 4. Sends the transcript to Backboard with memory: "Auto"
- * 5. Returns the AI-structured case note
+ * 4. Sends the transcript to Backboard with memory: "Auto" using Gemini Flash
+ * 5. Returns the AI-structured case note with model info
  */
 export async function POST(request: NextRequest) {
   try {
@@ -61,12 +65,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 3: Send transcript to Backboard
+    // Step 3: Send transcript to Backboard via Gemini Flash
     const prompt = `New case note for ${client.name}:\n\n${transcript}\n\nPlease process this note and respond with:\n1. A clean, structured case note\n2. Issue categories (HOUSING, MENTAL_HEALTH, SUBSTANCE_USE)\n3. Updated risk level (LOW, MED, HIGH)\n4. A 2-3 sentence actionable summary`;
 
-    const response = await sendMessage(threadId, prompt, {
+    const response = await sendMessageWithModel(threadId, prompt, GEMINI_FLASH_CONFIG, {
       memory: "Auto",
-      stream: false,
     });
 
     return NextResponse.json({
@@ -75,6 +78,11 @@ export async function POST(request: NextRequest) {
       clientName: client.name,
       threadId,
       structuredNote: response.content,
+      model: {
+        provider: response.model_provider,
+        name: response.model_name,
+      },
+      tokens: response.total_tokens,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

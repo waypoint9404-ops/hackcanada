@@ -12,7 +12,7 @@ Created the **"Waypoint Case Worker"** assistant via the Backboard REST API.
 | Config | Value |
 |---|---|
 | `assistant_id` | `7fd8cc1a-7e3b-4fcd-ac06-1573068594cf` |
-| **LLM (chat completions)** | **Gemini** — configured at the Backboard account level (the user added a Gemini API key to Backboard.io). The specific Gemini model variant is set in Backboard's dashboard, not per-assistant. |
+| **LLM (chat completions)** | **Gemini 2.5 Flash** — routed per-message via OpenRouter (`llm_provider: "openrouter"`, `model_name: "google/gemini-2.5-flash"`). Previously defaulted to GPT-4o because the model params were missing from API calls. |
 | **Embedding model** | OpenAI `text-embedding-3-large` (3072 dims) — used for memory/RAG retrieval. Google's `text-embedding-004` was attempted first but caused a 500 error on Backboard's side. |
 | System prompt | Structured, objective, subpoena-safe case note processing with HOUSING/MENTAL_HEALTH/SUBSTANCE_USE tags and LOW/MED/HIGH risk levels |
 

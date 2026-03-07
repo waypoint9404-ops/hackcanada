@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendMessage } from "@/lib/backboard";
+import {
+  sendMessageWithModel,
+  GEMINI_FLASH_CONFIG,
+} from "@/lib/backboard";
 
 /**
  * POST /api/qna
  *
- * Skeleton Smart Q&A endpoint:
+ * Smart Q&A endpoint:
  * 1. Accepts { clientId, question }
  * 2. Looks up the client's backboard_thread_id in Supabase
- * 3. Sends the question to Backboard with memory: "Auto" for RAG recall
- * 4. Returns the AI answer
+ * 3. Sends the question to Backboard with memory: "Auto" using Gemini Flash
+ * 4. Returns the AI answer with model info
+ *
+ * Uses Gemini Flash for quick Q&A. Can be upgraded to Gemini Pro
+ * for deeper reasoning by swapping to GEMINI_PRO_CONFIG.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -49,11 +55,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Send the question to Backboard
-    const response = await sendMessage(
+    // Send the question to Backboard via Gemini Flash
+    const response = await sendMessageWithModel(
       client.backboard_thread_id,
       `Question about ${client.name}: ${question}`,
-      { memory: "Auto", stream: false }
+      GEMINI_FLASH_CONFIG,
+      { memory: "Auto" }
     );
 
     return NextResponse.json({
@@ -62,6 +69,11 @@ export async function POST(request: NextRequest) {
       clientName: client.name,
       question,
       answer: response.content,
+      model: {
+        provider: response.model_provider,
+        name: response.model_name,
+      },
+      tokens: response.total_tokens,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
