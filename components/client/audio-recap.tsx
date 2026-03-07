@@ -80,7 +80,7 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
   };
 
   return (
-    <div className="w-full my-4">
+    <div className="w-full">
       {!audioUrl && !fallbackText ? (
         <Button 
           variant="secondary" 

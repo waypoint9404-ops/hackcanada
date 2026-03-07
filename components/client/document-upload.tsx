@@ -10,9 +10,10 @@ interface DocumentUploadProps {
     classification: { action: string; reason: string } | null;
     warning?: string;
   }) => void;
+  showEmptyText?: boolean;
 }
 
-export function DocumentUpload({ clientId, onDocumentProcessed }: DocumentUploadProps) {
+export function DocumentUpload({ clientId, onDocumentProcessed, showEmptyText }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -84,32 +85,32 @@ export function DocumentUpload({ clientId, onDocumentProcessed }: DocumentUpload
       <button
         onClick={() => fileInputRef.current?.click()}
         disabled={uploading}
-        className="flex items-center gap-2 px-4 py-2.5 text-xs font-mono uppercase tracking-wide border border-border-subtle rounded-sm text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex flex-col items-center justify-center gap-1 w-full px-4 py-4 text-xs font-mono uppercase tracking-wide border border-border-subtle rounded-sm text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="12" y1="18" x2="12" y2="12" />
-          <line x1="9" y1="15" x2="15" y2="15" />
-        </svg>
-        {uploading ? "Processing..." : "Upload Document"}
-      </button>
-
-      {status && (
-        <div className="flex items-center gap-2 text-[11px] font-mono text-accent">
-          <span className="inline-block w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-          {status}
+        <div className="flex items-center gap-2">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="12" y1="18" x2="12" y2="12" />
+            <line x1="9" y1="15" x2="15" y2="15" />
+          </svg>
+          {uploading ? "Processing..." : "Upload Document"}
         </div>
-      )}
+        {showEmptyText && !uploading && (
+          <span className="text-[10px] text-text-tertiary mt-1 normal-case font-sans">
+            No documents uploaded yet.
+          </span>
+        )}
+      </button>
 
       {error && (
         <p className="text-[11px] font-mono text-status-high-text">{error}</p>

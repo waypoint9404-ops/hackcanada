@@ -17,6 +17,7 @@ interface DocumentItem {
 interface DocumentListProps {
   clientId: string;
   refreshKey?: number;
+  onEmptyStateChange?: (isEmpty: boolean) => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -41,7 +42,7 @@ function formatDate(ts: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function DocumentList({ clientId, refreshKey }: DocumentListProps) {
+export function DocumentList({ clientId, refreshKey, onEmptyStateChange }: DocumentListProps) {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export function DocumentList({ clientId, refreshKey }: DocumentListProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch documents");
       setDocuments(data.documents || []);
+      onEmptyStateChange?.(data.documents?.length === 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error loading documents");
     } finally {
@@ -101,11 +103,7 @@ export function DocumentList({ clientId, refreshKey }: DocumentListProps) {
   }
 
   if (documents.length === 0) {
-    return (
-      <p className="text-[11px] text-text-tertiary font-mono py-3 text-center">
-        No documents uploaded yet.
-      </p>
-    );
+    return null;
   }
 
   return (

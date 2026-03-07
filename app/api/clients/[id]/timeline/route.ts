@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getThreadMessages } from "@/lib/backboard";
+import { getDocumentUrl } from "@/lib/supabase/storage";
 
 /**
  * A structured case note entry pairing AI note with its raw transcript.
@@ -15,6 +16,9 @@ interface CaseNoteEntry {
   source?: "call" | "document";
   /** If source is "document", the original filename */
   document_filename?: string;
+  document_id?: string;
+  file_size_bytes?: number;
+  download_url?: string;
 }
 
 /**
@@ -164,6 +168,33 @@ export async function GET(
     // Strip internal [RISK:...] tags from AI notes before sending to frontend
     for (const entry of entries) {
       entry.ai_note = entry.ai_note.replace(/\s*\[RISK:(?:LOW|MED|HIGH)\]\s*/g, "").trim();
+    }
+
+    // Fetch documents to enrich document entries
+    const { data: documents } = await supabase
+      .from("documents")
+      .select("id, filename, file_size_bytes, storage_path, linked_note_message_id")
+      .eq("client_id", id);
+      
+    if (documents && documents.length > 0) {
+      for (const entry of entries) {
+        if (entry.source === "document") {
+          const doc = documents.find(d => 
+            (d.linked_note_message_id && d.linked_note_message_id === entry.id) ||
+            (d.filename === entry.document_filename)
+          );
+          
+          if (doc) {
+            entry.document_id = doc.id;
+            entry.file_size_bytes = doc.file_size_bytes;
+            try {
+              entry.download_url = await getDocumentUrl(doc.storage_path);
+            } catch (e) {
+              // Ignore failure to generate URL
+            }
+          }
+        }
+      }
     }
 
     return NextResponse.json({ entries });
