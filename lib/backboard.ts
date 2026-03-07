@@ -32,7 +32,7 @@ export const GEMINI_FLASH_CONFIG: ModelConfig = {
 /** Gemini Pro — deeper reasoning. Use for risk-aware overviews and recap scripts. */
 export const GEMINI_PRO_CONFIG: ModelConfig = {
   llmProvider: "openrouter",
-  modelName: "google/gemini-3.1-pro-preview",
+  modelName: "google/gemini-3-flash-preview", // Use flash for now
 };
 
 // ─── Env Helpers ─────────────────────────────────────────────────────────────
