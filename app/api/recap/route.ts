@@ -80,17 +80,23 @@ export async function POST(request: NextRequest) {
       backboardResponse.content ?? "No summary could be generated.";
 
     // Step 3: Convert to speech via ElevenLabs
-    const audioBuffer = await generateSpeech(summaryText);
+    let audioBase64 = null;
+    let warning = null;
+    
+    try {
+      const audioBuffer = await generateSpeech(summaryText);
+      audioBase64 = audioBuffer.toString('base64');
+    } catch (elevenErr: any) {
+      console.warn("ElevenLabs generation failed:", elevenErr?.message);
+      warning = "ElevenLabs API error: " + elevenErr?.message;
+    }
 
-    // Step 4: Return audio response
-    return new Response(new Uint8Array(audioBuffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "audio/mpeg",
-        "Content-Length": String(audioBuffer.length),
-        "Content-Disposition": `inline; filename="recap-${client.name.replace(/\s+/g, "-").toLowerCase()}.mp3"`,
-        "X-Recap-Text": encodeURIComponent(summaryText),
-      },
+    // Step 4: Return JSON response
+    return NextResponse.json({
+      success: true,
+      audioBase64,
+      recapText: summaryText,
+      warning,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

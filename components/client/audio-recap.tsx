@@ -29,16 +29,20 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
       const data = await res.json();
       
       // Handle the text fallback gracefully if ElevenLabs is blocked
-      if (!res.ok || data.warning?.includes("ElevenLabs API error")) {
-        console.warn("Audio generation failed, using text fallback:", data.warning || data.error);
+      if (!res.ok || data.warning) {
+        console.warn("Audio generation failed or warning returned, using text fallback:", data.warning || data.error);
         setFallbackText(data.recapText || "Could not generate audio summary at this time. ElevenLabs API usage limit reached.");
         return;
       }
 
       // If successful, create a URL for the audio blob
       if (data.audioBase64) {
-        const audioBlob = Buffer.from(data.audioBase64, 'base64');
-        const file = new Blob([audioBlob], { type: 'audio/mpeg' });
+        const binaryString = window.atob(data.audioBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const file = new Blob([bytes], { type: 'audio/mpeg' });
         const url = URL.createObjectURL(file);
         setAudioUrl(url);
         
@@ -46,7 +50,10 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
         const audio = new Audio(url);
         audio.onended = () => setPlaying(false);
         setPlaying(true);
-        audio.play();
+        audio.play().catch((err) => {
+          console.error("Auto-play prevented", err);
+          setPlaying(false);
+        });
       } else {
         throw new Error("No audio data received");
       }
