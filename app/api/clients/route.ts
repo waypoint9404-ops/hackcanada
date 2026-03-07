@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createThread } from "@/lib/backboard";
 import { auth0 } from "@/lib/auth0";
+import { getCurrentWorkerId } from "@/lib/user-sync";
 
 /**
  * GET /api/clients
@@ -11,24 +12,25 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth0.getSession(request);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    
+    let workerId: string | null = null;
+    try {
+      workerId = await getCurrentWorkerId(session.user.sub);
+    } catch (e) {
+      console.warn("Worker not found for auth0 sub:", session.user.sub);
+    }
 
     const supabase = createAdminClient();
-    
-    // Convert Auth0 sub to Supabase user ID
-    const { data: worker } = await supabase
-      .from("users")
-      .select("id")
-      .eq("auth0_id", session.user.sub)
-      .single();
-
     let query = supabase.from("clients").select("*").order("updated_at", { ascending: false });
     
-    if (worker?.id) {
-      query = query.eq("assigned_worker_id", worker.id);
+    if (workerId) {
+      query = query.eq("assigned_worker_id", workerId);
     }
 
     const { data: clients, error } = await query;
-    if (error) throw error; return NextResponse.json({ clients });
+    if (error) throw error; 
+
+    return NextResponse.json({ clients });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
@@ -48,14 +50,14 @@ export async function POST(request: NextRequest) {
 
     if (!name?.trim()) return NextResponse.json({ error: "Name required" }, { status: 400 });
 
-    const supabase = createAdminClient();
+    let workerId: string | null = null;
+    try {
+      workerId = await getCurrentWorkerId(session.user.sub);
+    } catch (e) {
+      console.warn("Worker not found for auth0 sub:", session.user.sub);
+    }
 
-    // Get assigned worker ID
-    const { data: worker } = await supabase
-      .from("users")
-      .select("id")
-      .eq("auth0_id", session.user.sub)
-      .single();
+    const supabase = createAdminClient();
 
     // 1. Create Backboard thread
     const thread = await createThread();
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
         tags: tags || [],
         risk_level: risk_level || "LOW",
         backboard_thread_id: thread.thread_id,
-        assigned_worker_id: worker?.id || null
+        assigned_worker_id: workerId || null
       })
       .select()
       .single();

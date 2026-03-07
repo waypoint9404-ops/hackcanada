@@ -53,7 +53,7 @@ export function Sheet({ open, onClose, children, title }: SheetProps) {
           </div>
         )}
 
-        <div className="p-5">{children}</div>
+        <div className="p-5 pb-8">{children}</div>
       </div>
     </>
   );

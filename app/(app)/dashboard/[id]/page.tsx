@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { use, useState, useCallback, useEffect } from "react";
@@ -65,6 +66,11 @@ export default function ClientDetailPage({
   const handleIngestSuccess = (data: any) => {
     setRecorderOpen(false); // Close recorder
     setPendingNote(data.note || "No note generated"); // Prep the review modal
+    
+    // Update risk level immediately if the AI detected a change
+    if (data.riskLevel && client) {
+      setClient({ ...client, risk_level: data.riskLevel });
+    }
     
     // Slight delay for animation smoothness before opening review modal
     setTimeout(() => {
@@ -207,6 +213,16 @@ export default function ClientDetailPage({
             <DocumentList clientId={client.id} refreshKey={dataVersion} />
           </div>
         </section>
+        {/* Record Visit Button */}
+        <section>
+          <button
+            onClick={() => setRecorderOpen(true)}
+            className="w-full py-3 bg-white text-black rounded-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-accent-hover transition-colors font-medium"
+          >
+            <span className="text-lg">🎤</span>
+            <span className="text-sm font-medium">Record Visit</span>
+          </button>
+        </section>
 
         {/* Timeline of History */}
         <section>
@@ -226,15 +242,6 @@ export default function ClientDetailPage({
         </section>
         
       </div>
-
-      {/* Floating Action Button for Recorder */}
-      <button
-        onClick={() => setRecorderOpen(true)}
-        className="fixed bottom-20 right-5 w-14 h-14 bg-accent-primary text-white rounded-full flex items-center justify-center shadow-float cursor-pointer hover:bg-accent-hover transition-colors z-20 group"
-        aria-label="Record Visit"
-      >
-        <span className="text-2xl group-active:scale-95 transition-transform">🎤</span>
-      </button>
 
       {/* Bottom Sheets / Modals */}
       <VoiceRecorder
