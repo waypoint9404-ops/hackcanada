@@ -10,6 +10,8 @@ import { AudioRecap } from "@/components/client/audio-recap";
 import { QAChat } from "@/components/client/qa-chat";
 import { VoiceRecorder } from "@/components/client/voice-recorder";
 import { NoteReviewModal } from "@/components/client/note-review";
+import { DocumentUpload } from "@/components/client/document-upload";
+import { DocumentList } from "@/components/client/document-list";
 
 // The data structure returned by the initial server fetch
 interface ClientData {
@@ -82,6 +84,12 @@ export default function ClientDetailPage({
   // Handle note edit from the Timeline component
   const handleNoteEdited = () => {
     setDataVersion((v) => v + 1);
+  };
+
+  // Handle document upload completion
+  const handleDocumentProcessed = () => {
+    setDataVersion((v) => v + 1);
+    fetchClientData();
   };
 
   const handleDelete = async () => {
@@ -184,6 +192,20 @@ export default function ClientDetailPage({
         {/* Audio Recap Generator */}
         <section>
           <AudioRecap clientId={client.id} />
+        </section>
+
+        {/* Case Documents */}
+        <section>
+          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-widest font-mono mb-4">
+            Case Documents
+          </h2>
+          <DocumentUpload
+            clientId={client.id}
+            onDocumentProcessed={handleDocumentProcessed}
+          />
+          <div className="mt-3">
+            <DocumentList clientId={client.id} refreshKey={dataVersion} />
+          </div>
         </section>
 
         {/* Timeline of History */}

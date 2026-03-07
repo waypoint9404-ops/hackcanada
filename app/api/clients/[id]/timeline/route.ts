@@ -11,6 +11,10 @@ interface CaseNoteEntry {
   raw_transcript: string | null;
   timestamp: string | null;
   is_worker_edit: boolean;
+  /** Source of this entry: "call" (default), "document" */
+  source?: "call" | "document";
+  /** If source is "document", the original filename */
+  document_filename?: string;
 }
 
 /**
@@ -95,12 +99,21 @@ export async function GET(
             content.includes("actionable summary") ||
             content.includes("Extract the full name") ||
             content.startsWith("You are Waypoint") ||
-            content.startsWith("[Q&A]");
+            content.startsWith("[Q&A]") ||
+            content.startsWith("[DOCUMENT CLASSIFICATION");
           
           if (isSummaryPrompt) {
             // Skip both — this is an internal system call, not a case note
             i += 2;
             continue;
+          }
+
+          // Check if this is a document upload entry
+          const isDocumentUpload = content.startsWith("[DOCUMENT UPLOAD]");
+          let documentFilename: string | undefined;
+          if (isDocumentUpload) {
+            const filenameMatch = content.match(/Document filename:\s*(.+)/);
+            documentFilename = filenameMatch?.[1]?.trim();
           }
 
           // Extract just the raw transcript from the user message
@@ -114,9 +127,11 @@ export async function GET(
           entries.push({
             id: nextMsg.run_id ?? `entry-${i}`,
             ai_note: nextMsg.content ?? "",
-            raw_transcript: rawTranscript,
+            raw_transcript: isDocumentUpload ? null : rawTranscript,
             timestamp: (nextMsg as Record<string, unknown>).created_at as string | undefined ?? timestamp ?? null,
             is_worker_edit: false,
+            source: isDocumentUpload ? "document" : "call",
+            document_filename: documentFilename,
           });
           i += 2;
         } else {

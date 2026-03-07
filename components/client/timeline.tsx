@@ -10,6 +10,8 @@ interface CaseNoteEntry {
   raw_transcript: string | null;
   timestamp: string | null;
   is_worker_edit: boolean;
+  source?: "call" | "document";
+  document_filename?: string;
 }
 
 interface TimelineProps {
@@ -189,6 +191,14 @@ export function Timeline({ clientId, onNoteEdited, refreshKey }: TimelineProps) 
                   {entry.is_worker_edit ? (
                     <span className="text-accent font-semibold flex items-center gap-1">
                       <span>✏️</span> Edited Note
+                    </span>
+                  ) : entry.source === "document" ? (
+                    <span className="text-accent-ai font-semibold flex items-center gap-1">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
+                      {entry.document_filename ? `Doc: ${entry.document_filename}` : "Document Note"}
                     </span>
                   ) : (
                     <span className="text-accent-ai font-semibold">AI Note</span>
