@@ -33,6 +33,12 @@ export async function POST(
   try {
     const { id } = await params;
 
+    const session = await auth0.getSession(request);
+
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     // Read body once defensively
     let body: Record<string, unknown>;
     try {
@@ -50,11 +56,6 @@ export async function POST(
       tags?: string[];
       risk_level?: string;
     };
-
-    const session = await auth0.getSession(request);
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     if (!content || typeof content !== "string") {
       return NextResponse.json(

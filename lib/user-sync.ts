@@ -53,3 +53,22 @@ export async function getProfile(auth0Id: string) {
 
   return { data, error };
 }
+
+/**
+ * Fetch the Supabase worker ID given their Auth0 sub.
+ * Throws if not found or on error. Useful for protected routes.
+ */
+export async function getCurrentWorkerId(auth0Id: string): Promise<string> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth0_id", auth0Id)
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Worker profile not found for auth0_id: ${auth0Id}`);
+  }
+
+  return data.id;
+}
