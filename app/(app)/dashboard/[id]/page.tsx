@@ -196,7 +196,7 @@ export default function ClientDetailPage({
         <section>
           <button
             onClick={() => setRecorderOpen(true)}
-            className="w-full py-3 bg-accent-primary text-black rounded-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-accent-hover transition-colors shadow-sm"
+            className="w-full py-3 bg-white text-black rounded-sm flex items-center justify-center gap-2 cursor-pointer hover:bg-accent-hover transition-colors font-medium"
           >
             <span className="text-lg">🎤</span>
             <span className="text-sm font-medium">Record Visit</span>
