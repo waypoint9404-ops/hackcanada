@@ -8,6 +8,7 @@ import {
 import { regenerateSummary } from "@/lib/regenerate-summary";
 import { transcribeAudio } from "@/lib/elevenlabs";
 import { auth0 } from "@/lib/auth0";
+import { getCurrentWorkerId } from "@/lib/user-sync";
 
 /**
  * Extracts a phone number from text using regex to facilitate new client detection.
@@ -105,7 +106,14 @@ export async function POST(request: NextRequest) {
         let newName = extractRes.content?.trim() || "Unknown Client";
         if (newName.length > 30) newName = "New Client"; // Safety check
 
-        const workerIds = session ? await supabase.from("users").select("id").eq("auth0_id", session.user.sub).single() : null;
+        let workerId: string | null = null;
+        if (session) {
+          try {
+            workerId = await getCurrentWorkerId(session.user.sub);
+          } catch (e) {
+            console.warn("Worker not found for auto-client creation:", session.user.sub);
+          }
+        }
 
         const thread = await createThread();
         const { data: newClient } = await supabase
@@ -114,7 +122,7 @@ export async function POST(request: NextRequest) {
             name: newName,
             phone: detectedPhone || null,
             backboard_thread_id: thread.thread_id,
-            assigned_worker_id: workerIds?.data?.id || null
+            assigned_worker_id: workerId
           })
           .select()
           .single();
