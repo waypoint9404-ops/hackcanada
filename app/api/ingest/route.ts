@@ -4,8 +4,8 @@ import {
   createThread,
   sendMessageWithModel,
   GEMINI_FLASH_CONFIG,
-  GEMINI_PRO_CONFIG,
 } from "@/lib/backboard";
+import { regenerateSummary } from "@/lib/regenerate-summary";
 import { transcribeAudio } from "@/lib/elevenlabs";
 import { auth0 } from "@/lib/auth0";
 
@@ -18,9 +18,22 @@ function extractPhoneNumber(text: string): string | null {
   return match ? match[0] : null;
 }
 
+const NOTE_STRUCTURING_PROMPT = `Transform this raw case note transcript into a structured, professional case note for a social worker's records.
+
+FORMAT:
+- Start with a 1-2 sentence summary of the visit/interaction
+- Follow with bullet points covering: key client statements, observed conditions, actions taken, and recommended follow-ups
+- Use professional, objective language
+- Be concise but thorough — include all relevant details from the transcript
+- Do NOT include the raw transcript itself
+
+Raw transcript:
+`;
+
 /**
  * POST /api/ingest
  * Fully enhanced ingestion pipeline with NEW CLIENT auto-detection.
+ * After ingestion, triggers summary regeneration.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -107,15 +120,28 @@ export async function POST(request: NextRequest) {
     const { data: client } = await supabase.from("clients").select("*").eq("id", clientId).single();
     if (!client || !client.backboard_thread_id) return NextResponse.json({ error: "Invalid client state" }, { status: 400 });
 
-    // 3. Process Note via Backboard
-    const prompt = `New case note for ${client.name}:\n\n${transcript}\n\nRespond with a clean structured note.`;
-    const response = await sendMessageWithModel(client.backboard_thread_id, prompt, GEMINI_FLASH_CONFIG, { memory: "Auto" });
+    // 3. Process Note via Backboard with refined prompt
+    const prompt = `${NOTE_STRUCTURING_PROMPT}${transcript}`;
+    const response = await sendMessageWithModel(
+      client.backboard_thread_id, 
+      prompt, 
+      GEMINI_FLASH_CONFIG, 
+      { memory: "Auto" }
+    );
+
+    // 4. Trigger summary regeneration (non-blocking error handling)
+    try {
+      await regenerateSummary(client.id, client.backboard_thread_id);
+    } catch (summaryErr) {
+      console.error("[ingest] Summary regeneration failed (non-fatal):", summaryErr);
+    }
 
     return NextResponse.json({
       success: true,
       clientId: client.id,
       clientName: client.name,
       note: response.content,
+      rawTranscript: transcript,
       isNewClient: !request.headers.get("content-type")?.includes("multipart") && !body?.clientId
     });
 

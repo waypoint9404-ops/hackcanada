@@ -39,6 +39,9 @@ export default function ClientDetailPage({
   // Data passed from Recorder → Review modal
   const [pendingNote, setPendingNote] = useState("");
 
+  // Version counter to force refresh of summary + timeline after changes
+  const [dataVersion, setDataVersion] = useState(0);
+
   const fetchClientData = useCallback(async () => {
     try {
       const res = await fetch(`/api/clients/${id}`);
@@ -70,8 +73,15 @@ export default function ClientDetailPage({
   // Handle successful save from the review modal
   const handleReviewSuccess = () => {
     setReviewOpen(false);
-    // Refresh client data to get new tags/risk + remount timeline/summary
+    // Increment version to refresh timeline + summary
+    setDataVersion((v) => v + 1);
+    // Also refresh client data for tags/risk
     fetchClientData();
+  };
+
+  // Handle note edit from the Timeline component
+  const handleNoteEdited = () => {
+    setDataVersion((v) => v + 1);
   };
 
   const handleDelete = async () => {
@@ -99,7 +109,7 @@ export default function ClientDetailPage({
   }
 
   return (
-    <main className="min-h-dvh flex flex-col pt-6 pb-24 max-w-lg mx-auto bg-bg-base relative">
+    <main className="min-h-dvh flex flex-col pt-6 pb-24 md:max-w-4xl max-w-lg mx-auto bg-bg-base relative">
       {/* Header */}
       <header className="px-5 mb-6">
         <div className="flex items-center justify-between mb-2">
@@ -166,9 +176,9 @@ export default function ClientDetailPage({
       {/* Main Content Area */}
       <div className="px-5 flex flex-col gap-8 flex-1">
         
-        {/* Actionable Summary (Live from Backboard) */}
+        {/* Actionable Summary (cached from Supabase, refreshes on note changes) */}
         <section>
-          <ActionableSummary clientId={client.id} />
+          <ActionableSummary clientId={client.id} refreshKey={dataVersion} />
         </section>
 
         {/* Audio Recap Generator */}
@@ -181,7 +191,11 @@ export default function ClientDetailPage({
           <h2 className="text-sm font-medium text-text-secondary uppercase tracking-widest font-mono mb-4">
             Case History
           </h2>
-          <Timeline clientId={client.id} />
+          <Timeline
+            clientId={client.id}
+            refreshKey={dataVersion}
+            onNoteEdited={handleNoteEdited}
+          />
         </section>
 
         {/* Q&A Chat */}

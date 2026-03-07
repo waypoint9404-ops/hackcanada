@@ -341,3 +341,93 @@ h1, h2, h3 {
 .markdown-content em {
   font-style: italic;
 }
+
+/* ─── Case History: Horizontal Scroll (Desktop) / Vertical (Mobile) ──────── */
+
+.case-history-container {
+  width: 100%;
+  position: relative;
+}
+
+/* Base: vertical stack (mobile-first) */
+.case-history-scroll {
+  display: flex !important;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Desktop: horizontal scroll */
+@media (min-width: 768px) {
+  .case-history-scroll {
+    flex-direction: row !important;
+    gap: 1rem;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 0.75rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-subtle) transparent;
+  }
+
+  .case-history-scroll > .note-card {
+    min-width: 320px !important;
+    max-width: 380px;
+    flex-shrink: 0 !important;
+    scroll-snap-align: start;
+  }
+
+  /* Expanded cards take more space on desktop */
+  .case-history-scroll > .note-card-expanded {
+    min-width: 420px !important;
+    max-width: 480px;
+  }
+}
+
+/* ─── Note Cards ─────────────────────────────────────────────────────────── */
+
+.note-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1rem;
+  transition: border-color 300ms var(--ease-out-expo),
+              box-shadow 300ms var(--ease-out-expo),
+              min-width 300ms var(--ease-out-expo);
+}
+
+.note-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.note-card-expanded {
+  border-color: var(--accent-ai);
+  box-shadow: var(--shadow-md);
+}
+
+.note-card-saved {
+  border-color: var(--status-low-text) !important;
+  box-shadow: 0 0 0 1px var(--status-low-text), var(--shadow-sm);
+  animation: save-flash 2s var(--ease-out-expo) forwards;
+}
+
+@keyframes save-flash {
+  0% { border-color: var(--status-low-text); }
+  100% { border-color: var(--border-subtle); box-shadow: none; }
+}
+
+/* Collapsed content fade */
+.note-content-collapsed {
+  max-height: 120px;
+  overflow: hidden;
+  position: relative;
+}
+
+.note-fade-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to top, var(--bg-surface), transparent);
+  pointer-events: none;
+}

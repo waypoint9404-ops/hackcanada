@@ -4,6 +4,7 @@ import {
   sendMessageWithModel,
   GEMINI_FLASH_CONFIG,
 } from "@/lib/backboard";
+import { regenerateSummary } from "@/lib/regenerate-summary";
 import { rateLimit } from "@/lib/rate-limit";
 
 const limiter = rateLimit({ interval: 60_000, limit: 15 });
@@ -13,6 +14,7 @@ const limiter = rateLimit({ interval: 60_000, limit: 15 });
  *
  * Save an edited note back to the Backboard thread.
  * This keeps Backboard's memory aligned with any worker edits.
+ * After saving, triggers summary regeneration.
  *
  * Body: { content: string, tags?: string[], risk_level?: string }
  */
@@ -83,9 +85,18 @@ export async function POST(
 
     await supabase.from("clients").update(updates).eq("id", id);
 
+    // Trigger summary regeneration after the edit
+    let newSummary: string | null = null;
+    try {
+      newSummary = await regenerateSummary(id, client.backboard_thread_id);
+    } catch (summaryErr) {
+      console.error("[notes] Summary regeneration failed (non-fatal):", summaryErr);
+    }
+
     return NextResponse.json({
       success: true,
       acknowledgment: response.content,
+      summary: newSummary,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
