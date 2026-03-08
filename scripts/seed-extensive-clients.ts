@@ -44,15 +44,15 @@ Raw transcript:
 async function seed() {
   console.log("🌱 Starting Waypoint Extensive Database Seed with Factual AI Format (v3)...\n");
 
-  console.log("🧹 Cleaning up old seed data...");
-  const seedNames = SEED_CLIENTS.map(c => c.name);
-  const legacyNames = ["Alex Mercer", "Sam Riley", "Jamie Torres", "Marcus Thorne", "Elena Rostova", "David Chen", "Sarah Jenkins & Family", "Jordan 'JD' Davis", "Patricia 'Patty' O'Connor", "Samuel 'Sammy' Tucker", "TestUser"];
-  const allNames = [...new Set([...seedNames, ...legacyNames])];
+  const workerId = "fa297850-93c3-409e-9c74-5d9d5fcafea0";
+  console.log(`\n👤 Using hardcoded worker ID: ${workerId}`);
+
+  console.log("🧹 Cleaning up all data for this worker...");
 
   const { data: existing } = await supabase
     .from("clients")
     .select("id, name")
-    .in("name", allNames);
+    .eq("assigned_worker_id", workerId);
 
   if (existing && existing.length > 0) {
     const ids = existing.map(c => c.id);
@@ -60,14 +60,15 @@ async function seed() {
       await supabase.from("note_edits").delete().in("client_id", ids);
     } catch { /* table may not exist */ }
     
-    await supabase.from("clients").delete().in("id", ids);
-    console.log(`  └─ Removed ${existing.length} existing clients: ${existing.map(c => c.name).join(", ")}`);
-  } else {
-    console.log("  └─ No stale data found");
-  }
+    try {
+      await supabase.from("documents").delete().in("client_id", ids);
+    } catch { /* if documents also exist */ }
 
-  const workerId = "fa297850-93c3-409e-9c74-5d9d5fcafea0";
-  console.log(`\n👤 Using hardcoded worker ID: ${workerId}`);
+    await supabase.from("clients").delete().in("id", ids);
+    console.log(`  └─ Removed ${existing.length} existing clients assigned to worker.`);
+  } else {
+    console.log("  └─ No stale data found for this worker");
+  }
 
   const CHUNK_SIZE = 5;
   for (let i = 0; i < SEED_CLIENTS.length; i += CHUNK_SIZE) {
