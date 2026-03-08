@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auth0 } from "@/lib/auth0";
 import {
-  sendMessageWithModel,
-  GEMINI_FLASH_CONFIG,
+  sendMessage,
+  addMemory,
 } from "@/lib/backboard";
 import { regenerateSummary } from "@/lib/regenerate-summary";
 import { rateLimit } from "@/lib/rate-limit";
@@ -12,9 +12,9 @@ const limiter = rateLimit({ interval: 60_000, limit: 15 });
 
 /**
  * POST /api/clients/[id]/notes
- * Save an edited note to Supabase immediately, then sync to Backboard and
- * regenerate the summary asynchronously via `after()` so the client gets a
- * fast response. The edit is persisted in note_edits first (never lost).
+ * Accept an edited note, return immediately, then sync the edit to Backboard
+ * (with send_to_llm=false to avoid thread pollution) and add a persistent
+ * memory entry so the AI remembers the change. Summary is regenerated async.
  *
  * Body: { content: string, messageId?: string, tags?: string[], risk_level?: string }
  */
@@ -110,18 +110,26 @@ export async function POST(
     const clientId = id;
     const editedContent = content;
 
+    const targetId = messageId ?? "unknown";
+
     void (async () => {
-      const editMessage = `[WORKER EDIT — ${new Date().toISOString()}]\nThe social worker has reviewed and edited the following case note for ${clientName}:\n\n${editedContent}\n\nPlease acknowledge this edit and update your understanding of this client accordingly.`;
+      const editMessage = `[WORKER EDIT — ${new Date().toISOString()} — TARGET: ${targetId}]\nThe social worker has reviewed and edited the following case note for ${clientName}:\n\n${editedContent}\n\nPlease acknowledge this edit and update your understanding of this client accordingly.`;
 
       try {
-        await sendMessageWithModel(
-          threadId,
-          editMessage,
-          GEMINI_FLASH_CONFIG,
-          { memory: "Auto" }
-        );
+        await sendMessage(threadId, editMessage, {
+          memory: "Auto",
+          sendToLlm: false,
+        });
       } catch (err) {
         console.error("[notes/bg] Backboard sync failed:", err instanceof Error ? err.message : err);
+      }
+
+      try {
+        await addMemory(
+          `[CASE NOTE EDIT for ${clientName}] The social worker edited a case note on ${new Date().toISOString()}. Updated content:\n\n${editedContent}`
+        );
+      } catch (err) {
+        console.error("[notes/bg] addMemory failed:", err instanceof Error ? err.message : err);
       }
 
       try {

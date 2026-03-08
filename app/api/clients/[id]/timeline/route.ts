@@ -90,17 +90,29 @@ export async function GET(
         const nextMsg = i + 1 < filtered.length ? filtered[i + 1] : null;
 
         if (isWorkerEdit) {
-          // Worker edit — apply this edit to the PREVIOUS assistant note
+          // Worker edit — apply this edit to the targeted entry
           const editContent = content
             .replace(/\[WORKER EDIT[^\]]*\]\n*/i, "")
             .replace(/^The social worker has reviewed and edited the following case note for [^:]*:\n*/i, "")
             .replace(/\n*Please acknowledge this edit and update your understanding of this client accordingly\.?\s*$/i, "")
             .trim();
-          
-          // Find the most recently added entry and overwrite its content
-          if (entries.length > 0) {
-            entries[entries.length - 1].ai_note = editContent;
-            entries[entries.length - 1].is_worker_edit = true;
+
+          // Extract TARGET entry ID from the message header
+          const targetMatch = content.match(/TARGET:\s*([^\]]+)/);
+          const targetId = targetMatch?.[1]?.trim();
+
+          // Find the specific entry to overwrite (by TARGET ID, falling back to last entry)
+          let targetEntry: CaseNoteEntry | undefined;
+          if (targetId && targetId !== "unknown") {
+            targetEntry = entries.find(e => e.id === targetId);
+          }
+          if (!targetEntry && entries.length > 0) {
+            targetEntry = entries[entries.length - 1];
+          }
+
+          if (targetEntry) {
+            targetEntry.ai_note = editContent;
+            targetEntry.is_worker_edit = true;
           }
 
           if (nextMsg && nextMsg.role === "assistant") {

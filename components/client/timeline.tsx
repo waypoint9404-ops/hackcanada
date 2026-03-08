@@ -237,7 +237,7 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
         onConfirm: () => {
           closeConfirmModal();
           handleSave(entry.id);
-        } // User will explicitly click "Cancel" to skip saving, but we could add a third action. For simplicity, just prompt to save.
+        }
       });
     } else {
       cancelEditing(entry);
@@ -282,7 +282,6 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
         prev.map((e) => (e.id === id ? { ...e, ai_note: markdownContent, is_worker_edit: true } : e))
       );
 
-      onNoteEdited?.();
     } catch (err) {
       console.error("[Timeline] Save failed:", err);
       setSaveError(err instanceof Error ? err.message : "Error saving note");
@@ -421,7 +420,6 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
              <WysiwygEditor
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                onBlur={() => handleClickOutside(entry)}
                 containerProps={{ style: { border: 'none', minHeight: '200px' } }}
              />
           </div>

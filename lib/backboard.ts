@@ -256,6 +256,8 @@ export interface SendMessageOptions {
   llmProvider?: string;
   /** Model name override — e.g. "gemini-2.5-flash-preview-05-20" */
   modelName?: string;
+  /** If false, message is saved but no AI response is generated. Default: true. */
+  sendToLlm?: boolean;
 }
 
 /**
@@ -275,6 +277,7 @@ export async function sendMessage(
     stream = false,
     llmProvider,
     modelName,
+    sendToLlm,
   } = opts;
 
   // Backboard's message endpoint uses form-data
@@ -284,6 +287,10 @@ export async function sendMessage(
 
   if (memory) {
     formData.append("memory", memory);
+  }
+
+  if (sendToLlm !== undefined) {
+    formData.append("send_to_llm", String(sendToLlm));
   }
 
   // Model routing — the critical fix!
