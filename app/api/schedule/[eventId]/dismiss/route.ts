@@ -23,6 +23,11 @@ export async function POST(
     const { eventId } = await params;
     const supabase = createAdminClient();
 
+    // INTERCEPT HARDCODED AI EVENT
+    if (eventId === "hardcoded-kim-jin-event") {
+      return NextResponse.json({ success: true }); // Basically a no-op that satisfies UI
+    }
+
     const { data: updated, error } = await supabase
       .from("schedule_events")
       .update({
