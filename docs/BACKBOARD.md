@@ -4,16 +4,16 @@ At the core of the **Waypoint** platform for social workers is our integration w
 
 ---
 
-## 🚀 Our Innovation: Dynamic Dual-Model Routing via OpenRouter
+## 🚀 "Innovation" (1): Dynamic Dual-Model Routing via Google Provider
 
 While a standard Backboard implementation might default to a single LLM (like GPT-4o) for all tasks, social work requires both **speed** (for quickly ingesting field notes) and **nuance** (for deep risk assessment). 
 
 **Our innovation is overriding Backboard's default routing per-message to utilize a dual-model Gemini architecture.**
 
-By hooking into Backboard's OpenRouter integration, we created custom `ModelConfig` definitions in our `lib/backboard.ts` layer:
+By hooking into Backboard's native Google integration, we created custom `ModelConfig` definitions in our `lib/backboard.ts` layer:
 
-1. **Gemini 2.5 Flash (`google/gemini-3-flash-preview`)**: Triggered automatically for fast, cost-effective ingestion of messy field notes or voice transcriptions. It structures the data into objective, subpoena-safe formats instantly.
-2. **Gemini Pro (`google/gemini-3.1-pro-preview`)**: Triggered for complex Q&A and risk-aware overviews, providing deep reasoning over the client's entire stored case history.
+1. **Gemini 3 Flash (`gemini-3-flash-preview`)**: Triggered automatically for fast, cost-effective ingestion of messy field notes or voice transcriptions. It structures the data into objective, subpoena-safe formats instantly.
+2. **Gemini 3 Pro (`gemini-3.1-pro-preview`)**: Triggered for complex Q&A and risk-aware overviews, providing deep reasoning over the client's entire stored case history.
 
 This dynamic approach gives us the best of both worlds: lightning-fast UI responsiveness during data entry, and profound analytical depth during case review—all managed transparently by Backboard's threading wrapper.
 
@@ -21,21 +21,22 @@ This dynamic approach gives us the best of both worlds: lightning-fast UI respon
 sequenceDiagram
     participant App as Waypoint App
     participant BB as Backboard.io
-    participant OpenRouter as OpenRouter
+    participant Google as Google AI
     participant Flash as Gemini Flash
     participant Pro as Gemini Pro
 
     Note over App, Pro: Task: Rapid Voice Note Ingestion
-    App->>BB: sendMessage(model: "gemini-2.5-flash")
-    BB->>OpenRouter: Route to google/gemini-2.5-flash
-    OpenRouter->>Flash: Process unstructured text
+    App->>BB: sendMessage(model: "gemini-3-flash-preview")
+    BB->>Google: Route to gemini-3-flash-preview
+    Google->>Flash: Process unstructured text
     Flash-->>App: Structured, subpoena-safe note
     
     Note over App, Pro: Task: Deep Risk Analysis / Q&A
-    App->>BB: sendMessage(model: "gemini-pro")
-    BB->>OpenRouter: Route to google/gemini-pro
-    OpenRouter->>Pro: Deep reasoning & Memory Recall
+    App->>BB: sendMessage(model: "gemini-3.1-pro-preview")
+    BB->>Google: Route to gemini-3.1-pro-preview
+    Google->>Pro: Deep reasoning & Memory Recall
     Pro-->>App: Thorough, nuanced insights & risk alerts
+
 ```
 
 
@@ -171,4 +172,4 @@ Using tailored system prompts mapped to our "Waypoint Case Worker" assistant, ev
   - **Risk Level**: `MED`
 4. **Storage**: This objective note is saved to Supabase for the UI and natively embedded into Backboard's memory for future contextual Q&A.
 
-By deeply integrating Backboard.io's advanced capabilities—specifically OpenRouter dual-model routing and persistent assistant memory—Waypoint transforms fragmented social work data into a continuous, intelligent, and highly secure care narrative.
+By deeply integrating Backboard.io's advanced capabilities—specifically Google native dual-model routing and persistent assistant memory—Waypoint transforms fragmented social work data into a continuous, intelligent, and highly secure care narrative.

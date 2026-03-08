@@ -23,16 +23,16 @@ export interface ModelConfig {
 }
 
 /** Gemini Flash — fast & cheap. Use for ingestion, note-cleaning, simple Q&A.
- *  Backboard routes via OpenRouter, so model names use the `org/model` format. */
+ *  Backboard routes via Google natively. */
 export const GEMINI_FLASH_CONFIG: ModelConfig = {
-  llmProvider: process.env.BACKBOARD_LLM_PROVIDER ?? "openrouter",
-  modelName: process.env.BACKBOARD_MODEL_NAME ?? "google/gemini-3-flash-preview",
+  llmProvider: process.env.BACKBOARD_LLM_PROVIDER ?? "google",
+  modelName: process.env.BACKBOARD_MODEL_NAME ?? "gemini-3-flash-preview",
 };
 
 /** Gemini Pro — deeper reasoning. Use for risk-aware overviews and recap scripts. */
 export const GEMINI_PRO_CONFIG: ModelConfig = {
-  llmProvider: "openrouter",
-  modelName: "google/gemini-3-flash-preview", // Use flash for now for speed (switch to pro for production/hackathon demo)
+  llmProvider: "google",
+  modelName: "gemini-3-flash-preview", // Use flash for now for speed (switch to pro for production/hackathon demo)
 };
 
 // ─── Env Helpers ─────────────────────────────────────────────────────────────

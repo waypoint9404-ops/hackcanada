@@ -23,7 +23,7 @@ We built Waypoint around two core technologies, treating AI not as a gimmick, bu
 
 ### 1. Backboard.io (Intelligent Orchestration)
 We didn't just use Backboard as a simple LLM wrapper; we leveraged its deep memory features and custom model routing:
-- **Dynamic Dual-Model Routing:** We hooked into Backboard's OpenRouter integration. Lightning-fast ingestion of messy notes is routed to **Gemini Flash** (acting as an ETL pipeline). The resulting case thread is then passed to **Gemini Pro** for deep reasoning and risk assessment.
+- **Dynamic Dual-Model Routing:** We hooked into Backboard's native Google integration. Lightning-fast ingestion of messy notes is routed to **Gemini Flash** (acting as an ETL pipeline). The resulting case thread is then passed to **Gemini Pro** for deep reasoning and risk assessment.
 - **Thread-Scoped RAG:** Every client is mapped 1:1 with a unique Backboard Thread ID. When a document is uploaded, we utilize Backboard's native *Thread-Level Document API*. This ensures the RAG pipeline is strictly scoped to that individual client, totally preventing cross-client data leaks.
 
 ### 2. Auth0 (API Boundary & Secure AI Agents)
@@ -37,7 +37,7 @@ Security is non-negotiable for HIPAA and PIPEDA-compliant data.
 
 - **Frontend:** Next.js (App Router), React, Tailwind CSS, shadcn/ui
 - **Authentication & Security:** Auth0 (`@auth0/nextjs-auth0`)
-- **AI & Orchestration:** Backboard.io (Agentic Memory), Google Gemini (Flash & Pro via OpenRouter)
+- **AI & Orchestration:** Backboard.io (Agentic Memory), Google Gemini (Flash & Pro via native integration)
 - **Database & Storage:** Supabase (PostgreSQL, Storage Buckets)
 - **Voice & Audio:** Native Web Speech API (Transcription), ElevenLabs (Voice Generation)
 
