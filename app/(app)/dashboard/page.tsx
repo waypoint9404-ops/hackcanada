@@ -50,7 +50,7 @@ export default async function DashboardPage() {
   const highRiskCount = clients.filter(c => c.risk_level === "HIGH").length;
 
   return (
-    <main className="px-5 py-8 max-w-lg mx-auto pb-8">
+    <main className="px-5 py-8 max-w-lg md:max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto pb-8">
       <header className="mb-8">
         <h1 className="heading-display text-4xl mb-2 text-text-primary">
           Clients
@@ -69,9 +69,9 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
         {clients.length === 0 ? (
-          <div className="text-center py-12 px-6 border border-dashed border-border-strong rounded-lg">
+          <div className="col-span-full text-center py-12 px-6 border border-dashed border-border-strong rounded-lg">
             <p className="text-text-secondary text-sm mb-4">You have no active cases assigned.</p>
             <div className="max-w-xs mx-auto">
               <AddClientButton />
@@ -79,8 +79,8 @@ export default async function DashboardPage() {
           </div>
         ) : (
           clients.map((client) => (
-            <Link key={client.id} href={`/dashboard/${client.id}`} className="block focus-visible:outline-none rounded-sm">
-              <Card interactive className="p-4 flex flex-col gap-3">
+            <Link key={client.id} href={`/dashboard/${client.id}`} className="block h-full focus-visible:outline-none rounded-sm">
+              <Card interactive className="p-4 flex flex-col gap-3 h-full">
                 <div className="flex justify-between items-start">
                   <h2 className="font-serif text-xl font-normal text-text-primary tracking-tight">
                     {client.name}
@@ -92,18 +92,21 @@ export default async function DashboardPage() {
                   {client.summary ? stripMarkdown(client.summary) : "No active summary."}
                 </p>
 
-                {client.tags && client.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-1 mt-1 border-t border-border-subtle w-fit">
-                    {client.tags.slice(0, 3).map((tag: string) => (
-                      <TagBadge key={tag} tag={tag} />
-                    ))}
-                    {client.tags.length > 3 && (
-                      <span className="text-xs text-text-tertiary mt-0.5 font-mono">
-                        +{client.tags.length - 3}
-                      </span>
-                    )}
-                  </div>
-                )}
+                {/* mt-auto pushes the tags to the bottom of the card, ensuring uniform visual weighting */}
+                <div className="mt-auto pt-1 border-t border-border-subtle w-fit flex flex-wrap gap-2">
+                  {client.tags && client.tags.length > 0 && (
+                    <>
+                      {client.tags.slice(0, 3).map((tag: string) => (
+                        <TagBadge key={tag} tag={tag} />
+                      ))}
+                      {client.tags.length > 3 && (
+                        <span className="text-xs text-text-tertiary mt-0.5 font-mono">
+                          +{client.tags.length - 3}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
               </Card>
             </Link>
           ))

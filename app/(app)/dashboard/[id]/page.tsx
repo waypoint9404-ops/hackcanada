@@ -143,7 +143,14 @@ export default function ClientDetailPage({
   }
 
   return (
-    <main className="min-h-dvh flex flex-col pt-6 pb-24 md:max-w-4xl max-w-lg mx-auto bg-bg-base relative">
+    <main 
+      className="min-h-dvh flex flex-col pt-6 pb-24 md:max-w-4xl max-w-lg mx-auto relative"
+      style={{
+        // A subtle background that fades completely to transparent at the left and right edges on desktop,
+        // allowing the abstract background to beautifully frame the central content column.
+        background: "linear-gradient(to right, transparent, var(--bg-base) 10%, var(--bg-base) 90%, transparent)",
+      }}
+    >
       {/* Header */}
       <header className="px-5 mb-6">
         <div className="flex items-center justify-between mb-2">
