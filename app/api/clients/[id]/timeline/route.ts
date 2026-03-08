@@ -127,6 +127,7 @@ export async function GET(
             content.includes("actionable summary") ||
             content.includes("Extract the full name") ||
             content.startsWith("You are Waypoint") ||
+            content.startsWith("You are a scheduling assistant") ||
             content.startsWith("[Q&A]") ||
             content.startsWith("[DOCUMENT FACTS]") ||
             content.startsWith("[DOCUMENT CLASSIFICATION");
@@ -180,7 +181,8 @@ export async function GET(
         // Skip if it looks like a summary or system response
         const isSummaryResponse = content.includes("actionable summary") || 
           content.startsWith("•") || 
-          content.includes("1. **");
+          content.includes("1. **") ||
+          content.trim().startsWith("[{");
           
         const isDisregardAck = content.includes("acknowledge") || content.includes("disregard") || content.includes("deleted");
         
