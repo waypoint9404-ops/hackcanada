@@ -90,35 +90,36 @@ export async function GET(
         const nextMsg = i + 1 < filtered.length ? filtered[i + 1] : null;
 
         if (isWorkerEdit) {
-          // Worker edit — apply this edit to the targeted entry
-          const editContent = content
-            .replace(/\[WORKER EDIT[^\]]*\]\n*/i, "")
-            .replace(/^The social worker has reviewed and edited the following case note for [^:]*:\n*/i, "")
-            .replace(/\n*Please acknowledge this edit and update your understanding of this client accordingly\.?\s*$/i, "")
-            .trim();
+          const isSoftDeleteDirective = content.includes("disregard that specific note") || content.includes("decided to DELETE");
 
-          // Extract TARGET entry ID from the message header
-          const targetMatch = content.match(/TARGET:\s*([^\]]+)/);
-          const targetId = targetMatch?.[1]?.trim();
-
-          // Find the specific entry to overwrite (by TARGET ID, falling back to last entry)
-          let targetEntry: CaseNoteEntry | undefined;
-          if (targetId && targetId !== "unknown") {
-            targetEntry = entries.find(e => e.id === targetId);
-          }
-          if (!targetEntry && entries.length > 0) {
-            targetEntry = entries[entries.length - 1];
-          }
-
-          if (targetEntry) {
-            targetEntry.ai_note = editContent;
-            targetEntry.is_worker_edit = true;
-          }
-
-          if (nextMsg && nextMsg.role === "assistant") {
-            i += 2;
+          if (isSoftDeleteDirective) {
+            // Soft-delete directives are handled by Pass 1 (deletedIds) — skip entirely
+            i += (nextMsg && nextMsg.role === "assistant") ? 2 : 1;
           } else {
-            i += 1;
+            // Worker edit — apply this edit to the targeted entry
+            const editContent = content
+              .replace(/\[WORKER EDIT[^\]]*\]\n*/i, "")
+              .replace(/^The social worker has reviewed and edited the following case note for [^:]*:\n*/i, "")
+              .replace(/\n*Please acknowledge this edit and update your understanding of this client accordingly\.?\s*$/i, "")
+              .trim();
+
+            const targetMatch = content.match(/TARGET:\s*([^\]]+)/);
+            const targetId = targetMatch?.[1]?.trim();
+
+            let targetEntry: CaseNoteEntry | undefined;
+            if (targetId && targetId !== "unknown") {
+              targetEntry = entries.find(e => e.id === targetId);
+            }
+            if (!targetEntry && entries.length > 0) {
+              targetEntry = entries[entries.length - 1];
+            }
+
+            if (targetEntry) {
+              targetEntry.ai_note = editContent;
+              targetEntry.is_worker_edit = true;
+            }
+
+            i += (nextMsg && nextMsg.role === "assistant") ? 2 : 1;
           }
         } else if (nextMsg && nextMsg.role === "assistant") {
           // Normal pair: user transcript → AI structured note
@@ -218,29 +219,48 @@ export async function GET(
       .from("documents")
       .select("id, filename, file_size_bytes, storage_path, linked_note_message_id")
       .eq("client_id", id);
-      
+
     if (documents && documents.length > 0) {
+      const assignedDocIds = new Set<string>();
+
+      // Pass A: match by linked_note_message_id (most specific — 1:1 mapping)
       for (const entry of entries) {
         if (entry.source === "document") {
-          const doc = documents.find(d => 
-            (d.linked_note_message_id && d.linked_note_message_id === entry.id) ||
-            (d.filename === entry.document_filename)
+          const doc = documents.find(d =>
+            d.linked_note_message_id && d.linked_note_message_id === entry.id && !assignedDocIds.has(d.id)
           );
-          
           if (doc) {
             entry.document_id = doc.id;
             entry.file_size_bytes = doc.file_size_bytes;
-            try {
-              entry.download_url = await getDocumentUrl(doc.storage_path);
-            } catch (e) {
-              // Ignore failure to generate URL
-            }
+            try { entry.download_url = await getDocumentUrl(doc.storage_path); } catch { /* ignore */ }
+            assignedDocIds.add(doc.id);
+          }
+        }
+      }
+
+      // Pass B: fallback to filename match for remaining unmatched entries
+      for (const entry of entries) {
+        if (entry.source === "document" && !entry.document_id) {
+          const doc = documents.find(d =>
+            d.filename === entry.document_filename && !assignedDocIds.has(d.id)
+          );
+          if (doc) {
+            entry.document_id = doc.id;
+            entry.file_size_bytes = doc.file_size_bytes;
+            try { entry.download_url = await getDocumentUrl(doc.storage_path); } catch { /* ignore */ }
+            assignedDocIds.add(doc.id);
           }
         }
       }
     }
 
-    return NextResponse.json({ entries });
+    // Filter out orphaned document entries (Supabase doc was deleted but Backboard messages remain)
+    const finalEntries = entries.filter(entry => {
+      if (entry.source === "document" && !entry.document_id) return false;
+      return true;
+    });
+
+    return NextResponse.json({ entries: finalEntries });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

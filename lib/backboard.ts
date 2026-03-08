@@ -112,6 +112,17 @@ export interface BackboardStreamEvent {
   memory_operation_id?: string;
 }
 
+export interface BackboardDocument {
+  document_id: string;
+  filename: string;
+  status: "pending" | "processing" | "indexed" | "error";
+  status_message?: string;
+  summary?: string;
+  created_at: string;
+  updated_at?: string;
+  metadata_?: Record<string, unknown>;
+}
+
 export interface BackboardMemoryOperationStatus {
   status: "IN_PROGRESS" | "COMPLETED" | "FAILED";
   status_message?: string;
@@ -409,6 +420,131 @@ export async function* streamMessage(
     }
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// ─── Thread Documents (Native RAG) ──────────────────────────────────────────
+
+/**
+ * Upload a document directly to a Backboard thread for native RAG indexing.
+ * Thread-scoped: the document is only retrievable within this thread's context,
+ * unlike addMemory which is assistant-level (shared across all threads).
+ *
+ * Backboard handles extraction, chunking, and hybrid search (BM25 + vector)
+ * for all supported formats including PDF, Office, images, CSV, and code files.
+ */
+export async function uploadDocumentToThread(
+  threadId: string,
+  fileBuffer: Buffer,
+  filename: string,
+  mimeType: string
+): Promise<BackboardDocument> {
+  const formData = new FormData();
+  const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
+  formData.append("file", blob, filename);
+
+  const res = await fetchWithTimeout(
+    `${BASE_URL}/threads/${threadId}/documents`,
+    {
+      method: "POST",
+      headers: authHeaders(),
+      body: formData,
+    },
+    DEFAULT_TIMEOUT_MS * 2
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `[Backboard] Upload document to thread failed (${res.status}): ${text}`
+    );
+  }
+
+  return res.json();
+}
+
+/** Check the processing status of a Backboard document */
+export async function getDocumentStatus(
+  documentId: string
+): Promise<BackboardDocument> {
+  const res = await fetchWithTimeout(
+    `${BASE_URL}/documents/${documentId}/status`,
+    { method: "GET", headers: authHeaders() }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `[Backboard] Get document status failed (${res.status}): ${text}`
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * Poll until a document reaches "indexed" status.
+ * Throws if the document errors or the timeout is reached.
+ */
+export async function waitForDocumentIndexed(
+  documentId: string,
+  maxWaitMs: number = 60_000,
+  pollIntervalMs: number = 2_000
+): Promise<BackboardDocument> {
+  const start = Date.now();
+
+  while (Date.now() - start < maxWaitMs) {
+    const doc = await getDocumentStatus(documentId);
+
+    if (doc.status === "indexed") return doc;
+    if (doc.status === "error") {
+      throw new Error(
+        `[Backboard] Document indexing failed: ${doc.status_message}`
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new Error(
+    `[Backboard] Document indexing timed out after ${maxWaitMs}ms`
+  );
+}
+
+/** List all documents uploaded to a specific thread */
+export async function listThreadDocuments(
+  threadId: string
+): Promise<BackboardDocument[]> {
+  const res = await fetchWithTimeout(
+    `${BASE_URL}/threads/${threadId}/documents`,
+    { method: "GET", headers: authHeaders() }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `[Backboard] List thread documents failed (${res.status}): ${text}`
+    );
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data : data.documents ?? [];
+}
+
+/** Delete a document from Backboard by its Backboard document_id */
+export async function deleteBackboardDocument(
+  documentId: string
+): Promise<void> {
+  const res = await fetchWithTimeout(
+    `${BASE_URL}/documents/${documentId}`,
+    { method: "DELETE", headers: authHeaders() }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `[Backboard] Delete document failed (${res.status}): ${text}`
+    );
   }
 }
 
