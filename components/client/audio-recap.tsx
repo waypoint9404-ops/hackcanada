@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, Square } from "lucide-react";
 
@@ -14,7 +14,45 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
   const [error, setError] = useState<string | null>(null);
   const [fallbackText, setFallbackText] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    let animationFrameId: number;
+
+    const updateProgress = () => {
+      if (audioRef.current) {
+        setCurrentTime(audioRef.current.currentTime);
+      }
+      animationFrameId = requestAnimationFrame(updateProgress);
+    };
+
+    if (playing) {
+      animationFrameId = requestAnimationFrame(updateProgress);
+    }
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [playing]);
+
+  const formatTime = (time: number): string => {
+    if (!isFinite(time)) return "0:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+    }
+  };
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -76,6 +114,7 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
     
     audioRef.current.pause();
     audioRef.current.currentTime = 0;
+    setCurrentTime(0);
     setPlaying(false);
   };
 
@@ -149,9 +188,20 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
                   src={audioUrl}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
+                  onTimeUpdate={() => {
+                    if (audioRef.current) {
+                      setCurrentTime(audioRef.current.currentTime);
+                    }
+                  }}
+                  onLoadedMetadata={() => {
+                    if (audioRef.current) {
+                      setDuration(audioRef.current.duration);
+                    }
+                  }}
                   onEnded={() => {
                     setPlaying(false);
                     if (audioRef.current) audioRef.current.currentTime = 0;
+                    setCurrentTime(0);
                   }}
                   className="hidden"
                   autoPlay
@@ -159,19 +209,46 @@ export function AudioRecap({ clientId }: AudioRecapProps) {
               )}
               
               <div className={`flex items-center justify-center h-8 gap-0.5 mt-2 overflow-hidden bg-bg-surface rounded-full w-full max-w-[200px] mx-auto opacity-80 mix-blend-multiply transition-opacity duration-300 ${playing ? 'opacity-100' : 'opacity-40'}`}>
-                {Array.from({ length: 24 }).map((_, i) => (
-                  <span 
-                    key={i} 
-                    className="waveform-bar" 
-                    style={{ 
-                      animationDelay: `${i * 75}ms`,
-                      height: `${10 + Math.random() * 15}px`,
-                      width: '4px',
-                      animationPlayState: playing ? 'running' : 'paused'
-                    }} 
-                  />
-                ))}
+                {Array.from({ length: 24 }).map((_, i) => {
+                  // Fixed heights arrays so it doesn't Math.random() on every playback frame!
+                  const heights = [12, 18, 15, 24, 10, 22, 16, 25, 20, 14, 21, 19, 12, 25, 18, 14, 22, 16, 24, 13, 20, 15, 19, 11];
+                  return (
+                    <span 
+                      key={i} 
+                      className="waveform-bar" 
+                      style={{ 
+                        animationDelay: `${i * 120}ms`,
+                        animationDuration: '1.5s',
+                        height: `${heights[i]}px`,
+                        width: '4px',
+                        animationPlayState: playing ? 'running' : 'paused'
+                      }} 
+                    />
+                  );
+                })}
               </div>
+
+              {/* Audio scrubber below waveform */}
+              {audioUrl && (
+                <div className="flex flex-col gap-2 mt-3">
+                  <input
+                    type="range"
+                    min="0"
+                    max={duration || 0}
+                    step="0.01"
+                    value={currentTime}
+                    onChange={handleSeek}
+                    className="w-full h-1.5 bg-border-subtle rounded-full appearance-none cursor-pointer accent-accent"
+                    style={{
+                      background: `linear-gradient(to right, var(--color-accent) 0%, var(--color-accent) ${duration ? (currentTime / duration) * 100 : 0}%, var(--color-border-subtle) ${duration ? (currentTime / duration) * 100 : 0}%, var(--color-border-subtle) 100%)`
+                    }}
+                  />
+                  <div className="flex justify-between text-xs text-text-secondary px-1">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+                </div>
+              )}
             </>
           )}
           
