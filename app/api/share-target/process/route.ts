@@ -8,6 +8,12 @@ import {
   sendMessageWithModel,
   GEMINI_FLASH_CONFIG,
 } from "@/lib/backboard";
+import {
+  parseAppointmentFromResponse,
+  stripAppointmentBlock,
+  insertExtractedAppointment,
+} from "@/lib/extract-appointment";
+import { getCurrentWorkerId } from "@/lib/user-sync";
 
 /**
  * POST /api/share-target/process
@@ -149,7 +155,7 @@ export async function POST(request: NextRequest) {
     }
 
     const tsContext = localTimestamp ? `\nWorker's local date/time: ${localTimestamp}${timezone ? ` (${timezone})` : ""}. Use this date for the note, NOT UTC.\n` : "";
-    const prompt = `You are a factual case-note extraction agent. Extract ONLY objective, verifiable facts from this transcript. NEVER infer emotions, motivations, or conditions unless explicitly stated. Report only what was directly observed, stated, or done. These notes may be subpoenaed — accuracy is legally critical.\n${tsContext}\nNew case note for ${client.name}:\n\n${transcript}\n\nRespond with a structured factual note: a 1-2 sentence summary (who, where, when, what), then bullet points of direct statements, observed conditions, actions taken, and follow-up commitments. Nothing more.`;
+    const prompt = `You are a factual case-note extraction agent. Extract ONLY objective, verifiable facts from this transcript. NEVER infer emotions, motivations, or conditions unless explicitly stated. Report only what was directly observed, stated, or done. These notes may be subpoenaed — accuracy is legally critical.\n${tsContext}\nNew case note for ${client.name}:\n\n${transcript}\n\nRespond with a structured factual note: a 1-2 sentence summary (who, where, when, what), then bullet points of direct statements, observed conditions, actions taken, and follow-up commitments. Nothing more.\n\nAt the very end, on a new line, output EXACTLY one of: [RISK:LOW] [RISK:MED] [RISK:HIGH]\n\nIf the transcript mentions ANY future appointment, follow-up, or scheduled interaction, also output:\n[NEXT_APPOINTMENT]{"date":"YYYY-MM-DD","time":"HH:MM","type":"<event_type>","description":"<short title>","location":"<place or null>"}[/NEXT_APPOINTMENT]\nValid event_type values: home_visit, court, medical, phone_call, office, transport, other.`;
     const response = await sendMessageWithModel(
       client.backboard_thread_id,
       prompt,
@@ -157,11 +163,27 @@ export async function POST(request: NextRequest) {
       { memory: "Auto" }
     );
 
+    const noteContent = response.content ?? "";
+
+    // Extract appointment if present (non-blocking)
+    try {
+      const extracted = parseAppointmentFromResponse(noteContent);
+      if (extracted) {
+        let wId: string | null = null;
+        try { wId = await getCurrentWorkerId(session.user.sub); } catch { /* skip */ }
+        if (wId) {
+          await insertExtractedAppointment(wId, client.id, extracted, response.run_id);
+        }
+      }
+    } catch (apptErr) {
+      console.error("[share-target/process] Appointment extraction failed (non-fatal):", apptErr);
+    }
+
     return NextResponse.json({
       success: true,
       clientId: client.id,
       clientName: client.name,
-      note: response.content,
+      note: stripAppointmentBlock(noteContent.replace(/\[RISK:(LOW|MED|HIGH)\]/g, "")).trim(),
       transcript,
       isNewClient: !requestedClientId,
     });

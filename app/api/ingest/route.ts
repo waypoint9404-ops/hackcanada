@@ -9,6 +9,11 @@ import { regenerateSummary } from "@/lib/regenerate-summary";
 import { transcribeAudio } from "@/lib/elevenlabs";
 import { auth0 } from "@/lib/auth0";
 import { getCurrentWorkerId } from "@/lib/user-sync";
+import {
+  parseAppointmentFromResponse,
+  stripAppointmentBlock,
+  insertExtractedAppointment,
+} from "@/lib/extract-appointment";
 
 /**
  * Extracts a phone number from text using regex to facilitate new client detection.
@@ -38,6 +43,12 @@ FORMAT:
 - Do NOT include the raw transcript itself.
 - At the very end of your response, on a new line, output EXACTLY one of these risk tags: [RISK:LOW] [RISK:MED] [RISK:HIGH]
   Choose based on the factual severity: HIGH = immediate danger, legal jeopardy, or urgent medical need; MED = notable but non-urgent concerns; LOW = routine check-in with no red flags.
+
+ADDITIONALLY: If the transcript contains ANY reference to a future meeting, appointment, follow-up, court date, or scheduled interaction, extract it as a structured block AFTER the risk tag in this exact format:
+[NEXT_APPOINTMENT]{"date":"YYYY-MM-DD","time":"HH:MM","type":"<event_type>","description":"<short title>","location":"<place or null>"}[/NEXT_APPOINTMENT]
+If no future appointment is mentioned, do NOT include this block.
+Valid event_type values: home_visit, court, medical, phone_call, office, transport, other.
+For relative dates like "Tuesday" or "next week", resolve them against the worker's local date/time provided in context.
 
 Raw transcript:
 `;
@@ -170,6 +181,26 @@ export async function POST(request: NextRequest) {
         .eq("id", clientId);
     }
 
+    // 3c. Extract appointment from AI response (non-blocking)
+    let extractedAppointmentId: string | null = null;
+    try {
+      const extracted = parseAppointmentFromResponse(noteContent);
+      if (extracted) {
+        let workerId: string | null = null;
+        if (session) {
+          try { workerId = await getCurrentWorkerId(session.user.sub); } catch { /* skip */ }
+        }
+        if (workerId) {
+          const appt = await insertExtractedAppointment(
+            workerId, clientId!, extracted, response.run_id
+          );
+          extractedAppointmentId = appt?.id ?? null;
+        }
+      }
+    } catch (apptErr) {
+      console.error("[ingest] Appointment extraction failed (non-fatal):", apptErr);
+    }
+
     // 4. Trigger summary regeneration (non-blocking error handling)
     try {
       await regenerateSummary(client.id, client.backboard_thread_id);
@@ -181,10 +212,11 @@ export async function POST(request: NextRequest) {
       success: true,
       clientId: client.id,
       clientName: client.name,
-      note: noteContent.replace(/\[RISK:(LOW|MED|HIGH)\]/g, "").trim(),
+      note: stripAppointmentBlock(noteContent.replace(/\[RISK:(LOW|MED|HIGH)\]/g, "")).trim(),
       rawTranscript: transcript,
       riskLevel: detectedRisk || client.risk_level,
-      isNewClient: !request.headers.get("content-type")?.includes("multipart") && !body?.clientId
+      isNewClient: !request.headers.get("content-type")?.includes("multipart") && !body?.clientId,
+      extractedAppointmentId,
     });
 
   } catch (err) {

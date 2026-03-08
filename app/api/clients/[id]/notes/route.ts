@@ -7,6 +7,10 @@ import {
 } from "@/lib/backboard";
 import { regenerateSummary } from "@/lib/regenerate-summary";
 import { rateLimit } from "@/lib/rate-limit";
+import {
+  parseAppointmentFromResponse,
+  insertExtractedAppointment,
+} from "@/lib/extract-appointment";
 
 const limiter = rateLimit({ interval: 60_000, limit: 15 });
 
@@ -111,15 +115,25 @@ export async function POST(
     const editedContent = content;
 
     void (async () => {
-      const editMessage = `[WORKER EDIT — ${new Date().toISOString()}]\nThe social worker has reviewed and edited the following case note for ${clientName}:\n\n${editedContent}\n\nPlease acknowledge this edit and update your understanding of this client accordingly.`;
+      const editMessage = `[WORKER EDIT — ${new Date().toISOString()}]\nThe social worker has reviewed and edited the following case note for ${clientName}:\n\n${editedContent}\n\nPlease acknowledge this edit and update your understanding of this client accordingly.\n\nIf this note mentions ANY future appointment, follow-up, or scheduled interaction, also output:\n[NEXT_APPOINTMENT]{"date":"YYYY-MM-DD","time":"HH:MM","type":"<event_type>","description":"<short title>","location":"<place or null>"}[/NEXT_APPOINTMENT]\nValid event_type values: home_visit, court, medical, phone_call, office, transport, other.`;
 
       try {
-        await sendMessageWithModel(
+        const bbResponse = await sendMessageWithModel(
           threadId,
           editMessage,
           GEMINI_FLASH_CONFIG,
           { memory: "Auto" }
         );
+
+        // Try to extract appointment from the response
+        try {
+          const extracted = parseAppointmentFromResponse(bbResponse.content ?? "");
+          if (extracted && worker) {
+            await insertExtractedAppointment(worker.id, clientId, extracted, bbResponse.run_id);
+          }
+        } catch (apptErr) {
+          console.error("[notes/bg] Appointment extraction failed:", apptErr);
+        }
       } catch (err) {
         console.error("[notes/bg] Backboard sync failed:", err instanceof Error ? err.message : err);
       }

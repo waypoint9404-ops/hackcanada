@@ -20,7 +20,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const WORKER_EMAILS = [
   "aamirfiretv777@gmail.com",
   "dhimanishaan7@gmail.com",
-  "dhairyashah2513@gmail.com"
+  "dhairyashah2513@gmail.com",
+  "waypoint9404@gmail.com"
 ];
 
 const SUMMARY_PROMPT = `You are Waypoint, a case management assistant for municipal social workers.
