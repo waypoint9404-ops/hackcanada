@@ -7,6 +7,7 @@ import {
 } from "@/lib/backboard";
 import { regenerateSummary } from "@/lib/regenerate-summary";
 import { rateLimit } from "@/lib/rate-limit";
+import { extractScheduleItems } from "@/lib/extract-schedule";
 
 const limiter = rateLimit({ interval: 60_000, limit: 15 });
 
@@ -136,6 +137,13 @@ export async function POST(
         await regenerateSummary(clientId, threadId);
       } catch (err) {
         console.error("[notes/bg] Summary regeneration failed:", err instanceof Error ? err.message : err);
+      }
+
+      // Extract schedule items from the edited note
+      try {
+        await extractScheduleItems(threadId, editedContent, clientId, clientName, worker.id);
+      } catch (err) {
+        console.error("[notes/bg] Schedule extraction failed:", err instanceof Error ? err.message : err);
       }
     })();
 

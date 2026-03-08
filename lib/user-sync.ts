@@ -10,6 +10,9 @@ interface Auth0User {
 /**
  * Upsert the Auth0 user into the Supabase `users` table.
  * Called on every authenticated page load — the upsert is idempotent.
+ *
+ * Google Calendar tokens are stored separately via the direct OAuth flow
+ * (/api/google/auth → /api/google/callback), not through Auth0 claims.
  */
 export async function syncUser(auth0User: Auth0User) {
   const supabase = createAdminClient();

@@ -11,6 +11,7 @@ import {
 } from "@/lib/backboard";
 import { regenerateSummary } from "@/lib/regenerate-summary";
 import { rateLimit } from "@/lib/rate-limit";
+import { extractScheduleItems } from "@/lib/extract-schedule";
 
 const limiter = rateLimit({ interval: 60_000, limit: 10 });
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -240,6 +241,19 @@ export async function POST(
     regenerateSummary(clientId, client.backboard_thread_id).catch((err) =>
       console.error("[documents] Summary regeneration failed:", err)
     );
+
+    // 7. Extract schedule items from the AI note (async, don't block)
+    if (aiNote && worker?.id) {
+      extractScheduleItems(
+        client.backboard_thread_id,
+        aiNote,
+        clientId,
+        client.name,
+        worker.id
+      ).catch((err) =>
+        console.error("[documents] Schedule extraction failed:", err)
+      );
+    }
 
     return NextResponse.json({
       success: true,

@@ -4,6 +4,7 @@ import { syncUser, getProfile } from "@/lib/user-sync";
 import { updateProfile } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { GoogleCalendarConnect } from "@/components/schedule/google-cal-connect";
 
 export default async function ProfilePage() {
   const session = await auth0.getSession();
@@ -96,6 +97,14 @@ export default async function ProfilePage() {
           </div>
         </form>
       </Card>
+
+      {/* Google Calendar Integration */}
+      <div className="mb-8">
+        <h2 className="text-sm font-medium text-text-secondary uppercase tracking-widest font-mono mb-3">
+          Integrations
+        </h2>
+        <GoogleCalendarConnect />
+      </div>
 
       <div className="flex flex-col gap-4">
         <a href="/auth/logout" className="block">
