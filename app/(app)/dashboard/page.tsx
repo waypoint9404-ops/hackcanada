@@ -59,7 +59,7 @@ export default async function DashboardPage() {
           <p className="text-sm text-text-secondary">
             {clients.length === 0 
               ? "No clients assigned yet." 
-              : `${clients.length} assigned to ${worker?.name?.split(' ')[0] ?? 'you'}`}
+              : `${clients.length} assigned to you`}
           </p>
           {highRiskCount > 0 && (
             <span className="text-xs font-medium text-status-high-text bg-status-high-bg px-2.5 py-1 rounded-full">
