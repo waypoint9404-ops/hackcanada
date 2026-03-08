@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Sheet } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 
 interface VoiceRecorderProps {
   clientId?: string;
@@ -135,67 +134,83 @@ export function VoiceRecorder({ clientId, open, onClose, onIngestSuccess }: Voic
   };
 
   return (
-    <Sheet open={open} onClose={softClose} title={mode === "audio" ? (clientId ? "Record Case Note" : "Record New Client/Visit") : "Upload Transcript"}>
+    <Modal open={open} onClose={softClose} centered={true} title={mode === "audio" ? (clientId ? "Record Case Note" : "New Visit Record") : "Text Transcript"}>
       <div className="flex flex-col gap-6">
         
         {/* Input Mode Toggle */}
         {!recording && !processing && (
-          <div className="flex p-1 bg-bg-elevated rounded-sm border border-border-subtle w-full">
+          <div className="flex p-1 bg-bg-elevated rounded-md border border-border-subtle w-full">
             <button 
-              className={`flex-1 py-1.5 text-xs font-mono tracking-wide uppercase rounded-[2px] ${mode === "audio" ? "bg-bg-surface shadow-[var(--shadow-sm)] text-text-primary" : "text-text-secondary"}`}
+              className={`flex-1 py-2.5 text-xs font-mono tracking-wider uppercase rounded-[4px] min-h-[40px] transition-all duration-200 ${mode === "audio" ? "bg-bg-surface shadow-[var(--shadow-sm)] text-text-primary font-semibold" : "text-text-tertiary hover:text-text-secondary"}`}
               onClick={() => { setMode("audio"); setError(null); }}
             >
-               Voice
+              Voice
             </button>
             <button 
-              className={`flex-1 py-1.5 text-xs font-mono tracking-wide uppercase rounded-[2px] ${mode === "text" ? "bg-bg-surface shadow-[var(--shadow-sm)] text-text-primary" : "text-text-secondary"}`}
+              className={`flex-1 py-2.5 text-xs font-mono tracking-wider uppercase rounded-[4px] min-h-[40px] transition-all duration-200 ${mode === "text" ? "bg-bg-surface shadow-[var(--shadow-sm)] text-text-primary font-semibold" : "text-text-tertiary hover:text-text-secondary"}`}
               onClick={() => { setMode("text"); setError(null); }}
             >
-               Text Entry
+              Text
             </button>
           </div>
         )}
 
         {/* --- AUDIO MODE --- */}
         {mode === "audio" && (
-          <div className="flex flex-col items-center justify-center py-6 gap-6">
-            <div className={`text-4xl font-mono tabular-nums ${recording ? "text-accent" : "text-text-primary"}`}>
+          <div className="flex flex-col items-center justify-center gap-6 py-2">
+            
+            {/* Timer */}
+            <div className={`text-5xl font-mono tabular-nums tracking-tight ${recording ? "text-status-high-text" : "text-text-primary"}`}>
               {formatTime(duration)}
             </div>
 
             {processing ? (
-              <div className="flex flex-col items-center text-center gap-3 w-full">
-                <p className="text-sm text-text-primary font-medium animate-pulse">Processing via ElevenLabs & Backboard...</p>
-                <div className="h-1.5 w-full max-w-[200px] overflow-hidden bg-bg-elevated rounded-full">
-                  <div className="h-full bg-accent-primary animate-[shimmer_1s_infinite] w-[50%]" />
+              <div className="flex flex-col items-center text-center gap-4 w-full py-4">
+                <div className="flex items-center gap-1">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <span key={i} className="waveform-bar" style={{ animationDelay: `${i * 0.15}s`, background: 'var(--accent-ai)' }} />
+                  ))}
                 </div>
+                <p className="text-sm text-accent-ai font-medium">Analyzing & structuring notes...</p>
+                <p className="text-xs text-text-tertiary">Backboard is processing your recording</p>
               </div>
             ) : (
-              <Button 
-                variant={recording ? "danger" : "primary"}
-                onClick={recording ? stopRecording : startRecording}
-                className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${recording ? "animate-pulse" : ""}`}
-                style={{ padding: 0 }}
-              >
-                {recording ? (
-                  <div className="w-6 h-6 bg-white rounded-sm" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-                    <span className="w-4 h-4 rounded-full bg-accent-primary block" />
-                  </div>
-                )}
-              </Button>
-            )}
+              <>
+                {/* Record button with pulse ring */}
+                <div className="relative flex items-center justify-center" style={{ width: 96, height: 96 }}>
+                  {recording && <div className="rec-pulse-ring" />}
+                  <button
+                    onClick={recording ? stopRecording : startRecording}
+                    className={`relative z-10 w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${
+                      recording 
+                        ? "bg-status-high-bg border-2 border-status-high-text rec-btn-pulse" 
+                        : "bg-accent text-white hover:bg-accent-hover shadow-[var(--shadow-md)] hover:shadow-[var(--shadow-float)] active:scale-95"
+                    }`}
+                    style={{ minHeight: 80, minWidth: 80 }}
+                  >
+                    {recording ? (
+                      <div className="w-6 h-6 bg-status-high-text rounded-sm" />
+                    ) : (
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
 
-            {!recording && !processing && (
-              <p className="text-sm text-text-secondary text-center">
-                Tap to start recording. Speak naturally.
-              </p>
-            )}
-            {recording && (
-              <p className="text-sm text-status-high-text font-medium text-center">
-                Recording... Tap square to finalize ingestion.
-              </p>
+                {/* Status text */}
+                {!recording && (
+                  <p className="text-sm text-text-secondary text-center leading-relaxed">
+                    Tap to begin recording your visit notes
+                  </p>
+                )}
+                {recording && (
+                  <p className="text-sm text-status-high-text font-medium text-center">
+                    Recording &mdash; tap to stop & process
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}
@@ -203,35 +218,43 @@ export function VoiceRecorder({ clientId, open, onClose, onIngestSuccess }: Voic
         {/* --- TEXT MODE --- */}
         {mode === "text" && (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-text-secondary">
-              If ElevenLabs API is blocked or offline, you can paste the text transcript of the meeting here to run it through Backboard's note extraction workflow.
+            <p className="text-sm text-text-secondary leading-relaxed">
+              Paste or type a transcript to extract structured case notes.
             </p>
             <textarea
               value={transcriptText}
               onChange={(e) => setTranscriptText(e.target.value)}
               placeholder="Client states they have been..."
-              rows={8}
+              rows={6}
               disabled={processing}
-              className="w-full bg-bg-surface border border-border-subtle rounded-sm p-3 text-sm focus:outline-none focus:border-border-strong resize-none whitespace-pre-wrap"
+              className="w-full bg-bg-elevated border border-border-subtle rounded-md p-3.5 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:bg-bg-surface resize-none whitespace-pre-wrap transition-colors duration-200"
             />
-            <Button 
-              variant="primary" 
-              className="w-full" 
+            <button 
               onClick={handleTextSubmit}
               disabled={!transcriptText.trim() || processing}
+              className={`w-full py-3 text-sm font-medium rounded-md min-h-[48px] transition-all duration-200 cursor-pointer ${
+                !transcriptText.trim() || processing
+                  ? "bg-bg-elevated text-text-tertiary cursor-not-allowed"
+                  : "bg-accent text-white hover:bg-accent-hover active:scale-[0.98]"
+              }`}
             >
-              {processing ? "Processing AI Note..." : "Process Transcript"}
-            </Button>
+              {processing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : "Process Transcript"}
+            </button>
           </div>
         )}
 
+        {/* Error */}
         {error && (
-          <div className="p-3 bg-status-high-bg border border-status-high-bg text-status-high-text rounded-sm text-sm">
+          <div className="p-3.5 bg-status-high-bg border border-status-high-text/20 text-status-high-text rounded-md text-sm leading-relaxed">
             {error}
           </div>
         )}
-
       </div>
-    </Sheet>
+    </Modal>
   );
 }
