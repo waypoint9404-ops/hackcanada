@@ -9,6 +9,7 @@ import { regenerateSummary } from "@/lib/regenerate-summary";
 import { transcribeAudio } from "@/lib/elevenlabs";
 import { auth0 } from "@/lib/auth0";
 import { getCurrentWorkerId } from "@/lib/user-sync";
+import { extractScheduleItems } from "@/lib/extract-schedule";
 
 /**
  * Extracts a phone number from text using regex to facilitate new client detection.
@@ -177,6 +178,26 @@ export async function POST(request: NextRequest) {
       console.error("[ingest] Summary regeneration failed (non-fatal):", summaryErr);
     }
 
+    // 5. Extract schedule items from the note (fire-and-forget)
+    let scheduleSuggestions: { id: string; title: string; start_time: string; priority: string; client_id: string | null; client_name?: string }[] = [];
+    try {
+      let workerId: string | null = null;
+      if (session) {
+        try { workerId = await getCurrentWorkerId(session.user.sub); } catch { /* no-op */ }
+      }
+      if (workerId) {
+        scheduleSuggestions = await extractScheduleItems(
+          client.backboard_thread_id,
+          noteContent,
+          client.id,
+          client.name,
+          workerId
+        );
+      }
+    } catch (schedErr) {
+      console.error("[ingest] Schedule extraction failed (non-fatal):", schedErr);
+    }
+
     return NextResponse.json({
       success: true,
       clientId: client.id,
@@ -184,7 +205,8 @@ export async function POST(request: NextRequest) {
       note: noteContent.replace(/\[RISK:(LOW|MED|HIGH)\]/g, "").trim(),
       rawTranscript: transcript,
       riskLevel: detectedRisk || client.risk_level,
-      isNewClient: !request.headers.get("content-type")?.includes("multipart") && !body?.clientId
+      isNewClient: !request.headers.get("content-type")?.includes("multipart") && !body?.clientId,
+      scheduleSuggestions,
     });
 
   } catch (err) {

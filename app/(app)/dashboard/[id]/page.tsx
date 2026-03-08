@@ -13,6 +13,7 @@ import { VoiceRecorder } from "@/components/client/voice-recorder";
 import { NoteReviewModal } from "@/components/client/note-review";
 import { DocumentUpload } from "@/components/client/document-upload";
 import { Button } from "@/components/ui/button";
+import { UpcomingEvents } from "@/components/schedule/upcoming-events";
 
 // The data structure returned by the initial server fetch
 interface ClientData {
@@ -243,6 +244,9 @@ export default function ClientDetailPage({
             </button>
           </div>
         </section>
+
+        {/* Upcoming Schedule Events */}
+        <UpcomingEvents clientId={client.id} refreshKey={dataVersion} />
 
         {/* Audio Recap & Record Visit */}
         <section className="flex flex-col gap-2">

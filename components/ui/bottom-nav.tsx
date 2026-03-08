@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Users, UserCircle } from "lucide-react";
+import { Users, Calendar, UserCircle } from "lucide-react";
 import Dock from "./Dock";
 
 export function BottomNav() {
@@ -9,6 +9,7 @@ export function BottomNav() {
   const router = useRouter();
 
   const isDashboard = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+  const isSchedule = pathname === "/schedule" || pathname.startsWith("/schedule/");
   const isProfile = pathname === "/profile";
 
   const tabs = [
@@ -22,6 +23,17 @@ export function BottomNav() {
         </div>
       ), 
       onClick: () => router.push("/dashboard") 
+    },
+    { 
+      label: "Schedule", 
+      className: isSchedule ? "!bg-[#2A4B7C] !border-[#2A4B7C] shadow-md transition-all duration-300" : "transition-all duration-300 hover:!bg-black/5",
+      icon: (
+        <div className="flex flex-col items-center justify-center gap-1 mt-0.5">
+          <Calendar size={20} className={isSchedule ? "text-white" : "text-text-secondary"} />
+          <span className={`text-[10px] font-medium tracking-wide ${isSchedule ? "text-white" : "text-text-secondary"}`}>Schedule</span>
+        </div>
+      ), 
+      onClick: () => router.push("/schedule") 
     },
     { 
       label: "Profile", 
