@@ -56,26 +56,102 @@ We utilized Backboard's **Threads and Memories API** to solve this:
 flowchart TD
     Client[Client Profile in Supabase] -->|1:1 Mapping| Thread{Backboard Thread}
     
-    subgraph Ingestion Pipeline
+    subgraph Voice / Text Ingestion
     A[Raw Audio Note] --> B(ElevenLabs STT / Next.js API)
-    C[File Upload] --> B
+    B -->|sendMessage, memory: Auto| Thread
     end
     
-    B -->|Ingest| Thread
+    subgraph Document Upload Pipeline
+    C[PDF / TXT / DOCX / Image] -->|Raw file| D[Backboard Thread Document API]
+    D -->|Native RAG: chunk + index| Thread
+    C -->|Local text extraction| E[Structured Case Note Prompt]
+    E -->|sendMessage, memory: Auto| Thread
+    end
     
     subgraph Reasoning Pipeline
-    Thread -->|Flash Agent| D[Structure Data & Tag]
-    Thread -->|Pro Agent| E[Summarize & Assess Risk]
+    Thread -->|Flash Agent| F[Structure Data & Tag]
+    Thread -->|Pro Agent| G[Summarize & Assess Risk]
     end
     
-    D --> F[(Backboard Persistent Memory)]
-    E --> F
+    F --> H[(Thread-Scoped RAG Store)]
+    G --> H
     
-    G[Social Worker Query] -->|Ask Questions| Thread
-    F -.->|Automated Recall| G
+    I[Social Worker Query] -->|Ask Questions, memory: Readonly| Thread
+    H -.->|Automated Recall| I
 ```
 
+---
 
+## 📄 Document Upload → Thread-Scoped RAG
+
+Social workers frequently need to import existing client data—court notices, medical records, eviction letters, benefit statements—from past systems or external agencies. These documents must be accessible to the AI when answering questions or generating risk assessments, but **scoped strictly to the individual client**.
+
+### Why Thread-Level Documents Over Assistant-Level Memory
+
+Backboard's memory architecture has a critical distinction:
+
+| Mechanism | Scope | Use Case |
+|-----------|-------|----------|
+| `addMemory()` | **Assistant-level** — shared across all threads | General facts the assistant should know globally |
+| `POST /threads/{id}/documents` | **Thread-level** — isolated to one thread | Client-specific documents that must not leak across clients |
+| `sendMessage(memory: "Auto")` | **Assistant-level** extraction from thread context | Structured notes and conversational context |
+
+For privacy-sensitive social work data, we use Backboard's **thread-level document upload** (`uploadDocumentToThread`) so that a document uploaded to Client A's profile is only retrievable within Client A's thread. It cannot influence responses about Client B.
+
+### The Document Ingestion Pipeline
+
+```mermaid
+sequenceDiagram
+    participant SW as Social Worker
+    participant API as POST /api/clients/[id]/documents
+    participant Supa as Supabase Storage
+    participant BB_Doc as Backboard Thread Documents
+    participant BB_Msg as Backboard Thread Messages
+    participant AI as Gemini Flash
+
+    SW->>API: Upload file (PDF, TXT, DOCX, etc.)
+    
+    par Parallel Storage
+        API->>Supa: Store raw file (permanent download)
+        API->>BB_Doc: uploadDocumentToThread (native RAG)
+    end
+    
+    Note over BB_Doc: Backboard handles extraction,<br/>chunking, and hybrid indexing<br/>(BM25 + vector) — thread-scoped
+
+    API->>API: Extract text locally (PDF/TXT)
+    
+    alt Text extractable
+        API->>BB_Msg: classifyDocumentAction (memory: Readonly)
+        BB_Msg-->>API: CREATE or UPDATE classification
+        API->>BB_Msg: sendMessage(INGESTION_PROMPT, memory: Auto)
+        BB_Msg->>AI: Generate structured case note
+        AI-->>API: Subpoena-safe note for timeline
+    else Text not extractable (DOCX, images, etc.)
+        Note over API: Document still indexed by Backboard<br/>for RAG — queryable via Q&A
+    end
+    
+    API->>Supa: Store document record (metadata, AI summary)
+    API-->>API: regenerateSummary (async)
+```
+
+### Dual-Path Context Integration
+
+Each uploaded document enters the client's Backboard thread through **two complementary paths**:
+
+1. **Native Thread Document** — The raw file is uploaded directly to Backboard's thread document store via `POST /threads/{threadId}/documents`. Backboard handles extraction, chunking, and indexing using its hybrid search system. This is the **primary RAG source** for future Q&A queries and is fully thread-scoped.
+
+2. **Structured Case Note** (PDF/TXT only) — Text is extracted locally and processed through a classification + ingestion prompt to produce a human-readable, subpoena-safe case note. This note is sent to the thread with `memory: "Auto"`, making the AI's interpretation of the document available as conversational context.
+
+This dual-path ensures both the **raw document data** (for precise retrieval) and the **AI's structured interpretation** (for the timeline and risk assessment) are captured in the client's thread.
+
+### Classification: CREATE vs UPDATE
+
+Before generating a case note, the system asks the AI (with `memory: "Readonly"` to avoid polluting context) whether the document:
+
+- **CREATE**: Introduces a new development (e.g., a new eviction notice → new housing risk note)
+- **UPDATE**: Adds evidence to an existing case issue (e.g., a court reschedule → updates existing legal timeline)
+
+This classification is embedded in the ingestion prompt so the AI can frame the note appropriately.
 
 ---
 

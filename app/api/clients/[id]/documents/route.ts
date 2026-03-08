@@ -6,7 +6,7 @@ import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { classifyDocumentAction, type DocumentClassification } from "@/lib/document-actions";
 import {
   sendMessageWithModel,
-  addMemory,
+  uploadDocumentToThread,
   GEMINI_FLASH_CONFIG,
 } from "@/lib/backboard";
 import { regenerateSummary } from "@/lib/regenerate-summary";
@@ -115,10 +115,26 @@ export async function POST(
     const filename = file.name || "document";
     const mimeType = file.type || "application/octet-stream";
 
-    // 1. Upload to Supabase Storage
+    // 1. Upload to Supabase Storage (permanent file store for downloads)
     const storagePath = await uploadDocument(clientId, buffer, filename, mimeType);
 
-    // 2. Extract text (PDF only for now)
+    // 2. Upload raw file to Backboard thread for native RAG indexing.
+    //    Thread-scoped: only this client's thread can retrieve the document,
+    //    unlike addMemory which leaks across all threads at the assistant level.
+    //    Backboard handles extraction, chunking, and hybrid search (BM25 + vector)
+    //    for all supported formats — runs async, doesn't block the response.
+    uploadDocumentToThread(
+      client.backboard_thread_id,
+      buffer,
+      filename,
+      mimeType
+    ).catch((err) =>
+      console.error("[documents] Backboard thread document upload failed:", err)
+    );
+
+    // 3. Extract text locally (PDF/TXT) for the structured case note prompt.
+    //    Even though Backboard indexes the full document for RAG, we still need
+    //    extracted text to generate an immediate structured case note.
     let extractedText = "";
     let extractionResult = { text: "", pages: 0, isEmpty: true };
 
@@ -126,13 +142,14 @@ export async function POST(
       extractionResult = await extractTextFromPdf(buffer);
       extractedText = extractionResult.text;
     } else if (mimeType.startsWith("text/")) {
-      // Plain text files
       extractedText = buffer.toString("utf-8");
       extractionResult = { text: extractedText, pages: 1, isEmpty: extractedText.length === 0 };
     }
 
     if (extractionResult.isEmpty) {
-      // Still store the document but warn that AI processing wasn't possible
+      // Document is still indexed by Backboard for native RAG (step 2).
+      // We can't generate a structured note locally, but the document IS
+      // queryable via Q&A once Backboard finishes indexing.
       const { data: doc } = await supabase
         .from("documents")
         .insert({
@@ -143,8 +160,8 @@ export async function POST(
           mime_type: mimeType,
           file_size_bytes: file.size,
           extracted_text: null,
-          document_type: "other",
-          ai_summary: "Document uploaded but text could not be extracted. It may be a scanned image.",
+          document_type: inferDocumentType(filename, ""),
+          ai_summary: "Document uploaded and indexed for AI retrieval. Structured note unavailable — text extraction not supported for this format.",
           linked_note_message_id: null,
         })
         .select()
@@ -154,20 +171,23 @@ export async function POST(
         success: true,
         documentId: doc?.id,
         note: null,
-        warning: "No text could be extracted from this document. It may be a scanned image PDF or unsupported format.",
-        documentType: "other",
+        warning: "Text extraction not available for this format. The document has been indexed and is queryable via Q&A.",
+        documentType: inferDocumentType(filename, ""),
         classification: null,
       });
     }
 
-    // 3. Classify: create new note or update existing context
+    // 4. Classify: create new note or update existing context
     const classification = await classifyDocumentAction(
       client.backboard_thread_id,
       extractedText,
       filename
     );
 
-    // 4. Send to Backboard with memory: "Auto" — this is the critical integration
+    // 5. Generate structured case note via Backboard (memory: "Auto").
+    //    This serves two purposes:
+    //    A. Creates a human-readable case note for the timeline
+    //    B. The response is auto-vectorized into the thread's memory context
     const prompt = DOCUMENT_INGESTION_PROMPT(
       client.name,
       filename,
@@ -183,43 +203,10 @@ export async function POST(
     );
 
     const aiNote = response.content ?? "";
-
-    // Extract document type from AI response (simple heuristic)
     const docType = inferDocumentType(filename, extractedText);
-
-    // Short AI summary (first 200 chars of the note)
     const aiSummary = aiNote.slice(0, 200) + (aiNote.length > 200 ? "..." : "");
 
-    // --- DUAL-CHANNEL MEMORY ---
-    // A. Explicit Memory (tagged for retrieval filtering)
-    try {
-      const aiSummaryFactual = aiNote.slice(0, 500);
-      await addMemory(`[DOCUMENT] ${filename} — ${docType}. Uploaded ${new Date().toISOString().split('T')[0]}. ${aiSummaryFactual}`, {
-        stream: "document",
-        document_type: docType,
-        filename: filename,
-        client_id: clientId,
-        action: classification.action,
-        related_topic: classification.relatedTopic,
-      });
-    } catch (memErr) {
-      console.error("[documents] Failed to add explicit memory:", memErr);
-    }
-
-    // B. Factual stream thread message (shorter, objective timeline entry)
-    try {
-      await sendMessageWithModel(
-        client.backboard_thread_id,
-        `[DOCUMENT FACTS] Raw extracted case data:\nFilename: ${filename}\nType: ${docType}\nAction: ${classification.action}\nSummary: ${aiSummary}`,
-        GEMINI_FLASH_CONFIG,
-        { memory: "Auto" }
-      );
-    } catch (factErr) {
-      console.error("[documents] Failed to add factual stream message:", factErr);
-    }
-    // ---------------------------
-
-    // 5. Store document record in Supabase
+    // 6. Store document record in Supabase
     const { data: doc } = await supabase
       .from("documents")
       .insert({
@@ -229,7 +216,7 @@ export async function POST(
         storage_path: storagePath,
         mime_type: mimeType,
         file_size_bytes: file.size,
-        extracted_text: extractedText.slice(0, 50000), // Cap stored text
+        extracted_text: extractedText.slice(0, 50000),
         document_type: docType,
         ai_summary: aiSummary,
         linked_note_message_id: response.run_id ?? null,
@@ -237,7 +224,7 @@ export async function POST(
       .select()
       .single();
 
-    // 6. Regenerate summary (async, don't block response)
+    // 7. Regenerate summary (async, don't block response)
     regenerateSummary(clientId, client.backboard_thread_id).catch((err) =>
       console.error("[documents] Summary regeneration failed:", err)
     );

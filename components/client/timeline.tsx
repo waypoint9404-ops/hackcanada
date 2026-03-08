@@ -110,7 +110,7 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
     setConfirmModal({
       isOpen: true,
       title: "Delete Document",
-      message: "Are you sure you want to delete this document? The AI summary might remain.",
+      message: "Are you sure you want to delete this document? This will remove it permanently.",
       onConfirm: async () => {
         closeConfirmModal();
         setDeletingDocId(docId);
@@ -122,7 +122,12 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
             const data = await res.json();
             throw new Error(data.error || "Delete failed");
           }
-          fetchTimeline(); 
+          setEntries(prev => prev.filter(entry => entry.document_id !== docId));
+          if (expandedId) {
+            const expandedEntry = entries.find(e => e.id === expandedId);
+            if (expandedEntry?.document_id === docId) setExpandedId(null);
+          }
+          onNoteEdited?.();
         } catch (err) {
           console.error(err);
           alert(err instanceof Error ? err.message : "Error deleting document");
