@@ -59,6 +59,22 @@ export async function GET(
       (msg) => (msg.role as string) !== "system" && (msg.content ?? "").trim().length > 0
     );
 
+    // Pass 1: find all soft-delete directives
+    const deletedIds = new Set<string>();
+    for (const msg of filtered) {
+      const content = msg.content ?? "";
+      if (
+        msg.role === "user" && 
+        content.includes("[WORKER EDIT") && 
+        content.includes("disregard that specific note")
+      ) {
+        const match = content.match(/Message ID: (.*?)\)/);
+        if (match && match[1]) {
+          deletedIds.add(match[1]);
+        }
+      }
+    }
+
     // Pair user→assistant messages into structured entries
     const entries: CaseNoteEntry[] = [];
     let i = 0;
@@ -102,9 +118,12 @@ export async function GET(
             content.startsWith("[Q&A]") ||
             content.startsWith("[DOCUMENT FACTS]") ||
             content.startsWith("[DOCUMENT CLASSIFICATION");
+
+          // Check if it's a soft delete directive (we already parsed these)
+          const isSoftDelete = content.includes("[WORKER EDIT") && content.includes("disregard that specific note");
           
-          if (isSummaryPrompt) {
-            // Skip both — this is an internal system call, not a case note
+          if (isSummaryPrompt || isSoftDelete) {
+            // Skip both — this is an internal system call or soft delete, not a case note
             i += 2;
             continue;
           }
@@ -125,15 +144,20 @@ export async function GET(
             rawTranscript = caseNoteMatch[1].trim();
           }
 
-          entries.push({
-            id: nextMsg.run_id ?? `entry-${i}`,
-            ai_note: nextMsg.content ?? "",
-            raw_transcript: isDocumentUpload ? null : rawTranscript,
-            timestamp: (nextMsg as Record<string, unknown>).created_at as string | undefined ?? timestamp ?? null,
-            is_worker_edit: false,
-            source: isDocumentUpload ? "document" : "call",
-            document_filename: documentFilename,
-          });
+          const entryId = nextMsg.run_id ?? `entry-${i}`;
+          
+          // Only add if it hasn't been soft-deleted
+          if (!deletedIds.has(entryId)) {
+            entries.push({
+              id: entryId,
+              ai_note: nextMsg.content ?? "",
+              raw_transcript: isDocumentUpload ? null : rawTranscript,
+              timestamp: (nextMsg as Record<string, unknown>).created_at as string | undefined ?? timestamp ?? null,
+              is_worker_edit: false,
+              source: isDocumentUpload ? "document" : "call",
+              document_filename: documentFilename,
+            });
+          }
           i += 2;
         } else {
           // Unpaired user message — skip (shouldn't happen normally)
@@ -145,15 +169,20 @@ export async function GET(
         const isSummaryResponse = content.includes("actionable summary") || 
           content.startsWith("•") || 
           content.includes("1. **");
+          
+        const isDisregardAck = content.includes("acknowledge") || content.includes("disregard") || content.includes("deleted");
         
-        if (!isSummaryResponse) {
-          entries.push({
-            id: msg.run_id ?? `entry-${i}`,
-            ai_note: content,
-            raw_transcript: null,
-            timestamp: timestamp ?? null,
-            is_worker_edit: false,
-          });
+        if (!isSummaryResponse && !isDisregardAck) {
+          const entryId = msg.run_id ?? `entry-${i}`;
+          if (!deletedIds.has(entryId)) {
+            entries.push({
+              id: entryId,
+              ai_note: content,
+              raw_transcript: null,
+              timestamp: timestamp ?? null,
+              is_worker_edit: false,
+            });
+          }
         }
         i += 1;
       } else {

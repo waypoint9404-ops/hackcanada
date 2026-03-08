@@ -232,6 +232,21 @@ export async function getThreadMessages(
 
 // ─── Messages ────────────────────────────────────────────────────────────────
 
+export async function deleteMessage(threadId: string, messageId: string): Promise<void> {
+  const res = await fetchWithTimeout(
+    `${BASE_URL}/threads/${threadId}/messages/${messageId}`,
+    { method: "DELETE", headers: authHeaders() }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `[Backboard] Delete message failed (${res.status}): ${text}`
+    );
+  }
+}
+
+
 export interface SendMessageOptions {
   /** Enable persistent memory: "Auto" | "Readonly" | "Off" */
   memory?: "Auto" | "Readonly" | "Off";

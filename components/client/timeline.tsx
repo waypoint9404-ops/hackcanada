@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import dynamic from "next/dynamic";
 import { marked } from "marked";
 import TurndownService from "turndown";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 
 const WysiwygEditor = dynamic(() => import("react-simple-wysiwyg"), { ssr: false });
 
@@ -50,31 +51,86 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Raw transcript visibility
   const [transcriptVisible, setTranscriptVisible] = useState(false);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+
+  // Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
+
+  const closeConfirmModal = () => setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+
+  const handleDeleteNote = async (noteId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (deletingNoteId) return;
+    
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete AI Note",
+      message: "Are you sure you want to delete this AI note? This will remove it permanently and update the client summary.",
+      onConfirm: async () => {
+        closeConfirmModal();
+        setDeletingNoteId(noteId);
+        try {
+          const res = await fetch(`/api/clients/${clientId}/notes/${noteId}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || "Delete failed");
+          }
+          
+          setEntries(prev => prev.filter(entry => entry.id !== noteId));
+          if (expandedId === noteId) setExpandedId(null);
+          onNoteEdited?.();
+        } catch (err) {
+          console.error(err);
+          alert(err instanceof Error ? err.message : "Error deleting note");
+        } finally {
+          setDeletingNoteId(null);
+        }
+      }
+    });
+  };
 
   const handleDeleteDocument = async (docId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (deletingDocId) return;
-    if (!window.confirm("Are you sure you want to delete this document? The AI summary might remain.")) return;
     
-    setDeletingDocId(docId);
-    try {
-      const res = await fetch(`/api/clients/${clientId}/documents/${docId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Delete failed");
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Document",
+      message: "Are you sure you want to delete this document? The AI summary might remain.",
+      onConfirm: async () => {
+        closeConfirmModal();
+        setDeletingDocId(docId);
+        try {
+          const res = await fetch(`/api/clients/${clientId}/documents/${docId}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.error || "Delete failed");
+          }
+          fetchTimeline(); 
+        } catch (err) {
+          console.error(err);
+          alert(err instanceof Error ? err.message : "Error deleting document");
+        } finally {
+          setDeletingDocId(null);
+        }
       }
-      fetchTimeline(); 
-    } catch (err) {
-      console.error(err);
-      alert(err instanceof Error ? err.message : "Error deleting document");
-    } finally {
-      setDeletingDocId(null);
-    }
+    });
   };
 
   const fetchTimeline = useCallback(async () => {
@@ -105,10 +161,16 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
     if (expandedId === id) {
       const entry = entries.find(e => e.id === expandedId);
       if (entry && isEditing && isDirty(entry)) {
-         if (window.confirm("You have unsaved changes. Do you want to save them now?")) {
+        setConfirmModal({
+          isOpen: true,
+          title: "Unsaved Changes",
+          message: "You have unsaved changes. Do you want to save them now?",
+          onConfirm: () => {
+            closeConfirmModal();
             handleSave(entry.id);
-            return;
-         }
+          }
+        });
+        return;
       }
       // Collapse
       setExpandedId(null);
@@ -120,9 +182,20 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
       if (expandedId && isEditing) {
          const oldEntry = entries.find(e => e.id === expandedId);
          if (oldEntry && isDirty(oldEntry)) {
-            if (!window.confirm("You have unsaved changes in the open note. Discard them?")) {
-               return; // cancel expansion change
-            }
+            setConfirmModal({
+              isOpen: true,
+              title: "Discard Changes",
+              message: "You have unsaved changes in the open note. Discard them?",
+              onConfirm: () => {
+                closeConfirmModal();
+                setExpandedId(id);
+                setIsEditing(false);
+                setEditContent("");
+                setTranscriptVisible(false);
+                setSaveError(null);
+              }
+            });
+            return; // delay expansion change
          }
       }
       setExpandedId(id);
@@ -157,11 +230,15 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
     if (!isEditing) return;
     
     if (isDirty(entry)) {
-      if (window.confirm("You have unsaved changes. Do you want to save them now?")) {
-        handleSave(entry.id);
-      } else {
-        cancelEditing(entry);
-      }
+      setConfirmModal({
+        isOpen: true,
+        title: "Unsaved Changes",
+        message: "You have unsaved changes. Do you want to save them now?",
+        onConfirm: () => {
+          closeConfirmModal();
+          handleSave(entry.id);
+        } // User will explicitly click "Cancel" to skip saving, but we could add a third action. For simplicity, just prompt to save.
+      });
     } else {
       cancelEditing(entry);
     }
@@ -379,6 +456,16 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
             </button>
           )}
 
+          {entry.source !== "document" && (
+            <button
+              onClick={(e) => handleDeleteNote(entry.id, e)}
+              disabled={deletingNoteId === entry.id}
+              className="text-[11px] font-mono text-status-high-text hover:text-status-high-hover cursor-pointer transition-colors disabled:opacity-50 ml-auto"
+            >
+              {deletingNoteId === entry.id ? "Deleting..." : "🗑️ Delete Note"}
+            </button>
+          )}
+
           {entry.source === "document" && entry.document_id && (
             <div className="flex items-center gap-3 text-[11px] font-mono text-text-tertiary ml-auto">
               {entry.file_size_bytes && <span>{formatFileSize(entry.file_size_bytes)}</span>}
@@ -473,30 +560,42 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
                 {isLong && <div className="note-fade-overlay" />}
               </div>
 
-              {/* Document actions */}
-              {entry.source === "document" && entry.document_id && (
+              {/* Actions */}
+              {(entry.source === "document" && entry.document_id) || entry.source !== "document" ? (
                 <div className="mt-3 flex items-center gap-3 text-[10px] font-mono text-text-tertiary pt-2 border-t border-border-subtle border-dashed">
-                  {entry.file_size_bytes && <span>{formatFileSize(entry.file_size_bytes)}</span>}
-                  {entry.download_url && (
-                    <a
-                      href={entry.download_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-accent hover:underline cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
+                  {entry.source === "document" ? (
+                    <>
+                      {entry.file_size_bytes && <span>{formatFileSize(entry.file_size_bytes)}</span>}
+                      {entry.download_url && (
+                        <a
+                          href={entry.download_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-accent hover:underline cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Download
+                        </a>
+                      )}
+                      <button
+                        onClick={(e) => handleDeleteDocument(entry.document_id!, e)}
+                        disabled={deletingDocId === entry.document_id}
+                        className="text-text-tertiary hover:text-status-high-text transition-colors cursor-pointer disabled:opacity-50 ml-auto"
+                      >
+                        {deletingDocId === entry.document_id ? "..." : "Delete Doc"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={(e) => handleDeleteNote(entry.id, e)}
+                      disabled={deletingNoteId === entry.id}
+                      className="text-text-tertiary hover:text-status-high-text transition-colors cursor-pointer disabled:opacity-50 ml-auto"
                     >
-                      Download
-                    </a>
+                      {deletingNoteId === entry.id ? "..." : "Delete Note"}
+                    </button>
                   )}
-                  <button
-                    onClick={(e) => handleDeleteDocument(entry.document_id!, e)}
-                    disabled={deletingDocId === entry.document_id}
-                    className="text-text-tertiary hover:text-status-high-text transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {deletingDocId === entry.document_id ? "..." : "Delete"}
-                  </button>
                 </div>
-              )}
+              ) : null}
 
 
 
@@ -510,6 +609,15 @@ export function Timeline({ clientId, onNoteEdited, refreshKey, filter = "all" }:
           );
         })}
       </div>
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirmModal}
+        isDestructive={confirmModal.title.includes("Delete") || confirmModal.title.includes("Discard")}
+      />
     </div>
   );
 }
