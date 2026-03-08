@@ -67,7 +67,3 @@ Shows how to use { memory: "Auto" } to save a new voice note.
 Shows how to use { memory: "Readonly" } to read the whole file and return bullet points.
 	•	route.ts
 Shows how addMemory() is used to inject document metadata directly into the system’s memory.
-
-⸻
-
-Gemini 3.1 Pro (Preview) • 1x
