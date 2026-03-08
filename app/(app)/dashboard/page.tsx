@@ -39,11 +39,19 @@ export default async function DashboardPage() {
   if (worker?.id) {
     const { data } = await supabase
       .from("clients")
-      .select("id, name, risk_level, tags, summary")
+      .select("id, name, risk_level, tags, summary, updated_at")
       .eq("assigned_worker_id", worker.id)
       .order("updated_at", { ascending: false });
     
-    if (data) clients = data;
+    if (data) {
+      const riskWeight: Record<string, number> = { "HIGH": 1, "MED": 2, "LOW": 3 };
+      clients = data.sort((a, b) => {
+        const wA = riskWeight[a.risk_level] || 4;
+        const wB = riskWeight[b.risk_level] || 4;
+        if (wA !== wB) return wA - wB;
+        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+      });
+    }
   }
 
   // Count high risk for summary
